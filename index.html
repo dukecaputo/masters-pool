@@ -1,0 +1,148 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Masters Pool Tracker</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+        .score-under { color: #d91e18; font-weight: bold; }
+        .score-even { color: #27ae60; font-weight: bold; }
+        .score-over { color: #2c3e50; font-weight: bold; }
+        .card { background: white; border-radius: 8px; box-shadow: 0 4px 6px rgba(0,0,0,0.1); }
+        .loading-spinner { border: 4px solid #f3f3f3; border-top: 4px solid #166534; border-radius: 50%; width: 30px; height: 30px; animation: spin 1s linear infinite; }
+        @keyframes spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }
+    </style>
+</head>
+<body class="bg-gray-100 min-h-screen p-4 md:p-8">
+
+    <div class="max-w-5xl mx-auto">
+        <header class="text-center mb-8">
+            <h1 class="text-4xl font-bold text-green-800">Masters Live Pool</h1>
+            <p id="last-updated" class="text-gray-500 text-sm mt-2 flex justify-center items-center gap-2">
+                Initializing...
+            </p>
+            <div id="cut-line-display" class="mt-4 inline-block bg-green-100 text-green-800 px-4 py-1 rounded-full font-semibold">
+                Projected Cut: --
+            </div>
+        </header>
+
+        <div id="teams-container" class="grid grid-cols-1 md:grid-cols-2 gap-6">
+            <!-- Data will load here -->
+        </div>
+    </div>
+
+    <script>
+        // 1. PASTE YOUR PUBLISHED CSV URL HERE
+        const SHEET_CSV_URL = 'https://docs.google.com/spreadsheets/d/e/2PACX-1vRNUYd3Yuvmvt0Uc9Ov54IguAwMgXPehvt7tjDBUonuQpKu1e6zmQNWDdGMCSWfU8zslFHi90T7AEzc/pub?gid=0&single=true&output=csv';
+        
+        // Live Leaderboard API
+        const API_URL = "https://champs-api.vercel.app/api/masters"; 
+
+        async function fetchTeamsFromSheet() {
+            try {
+                const response = await fetch(SHEET_CSV_URL);
+                const data = await response.text();
+                // Parse CSV rows
+                const rows = data.split('\n').map(row => row.split(','));
+                
+                // Convert rows to Pool Team objects (skipping header row)
+                return rows.slice(1).filter(row => row[0]).map(row => ({
+                    owner: row[0].trim(),
+                    golfers: row.slice(1, 10).map(g => g.trim().replace("\r", ""))
+                }));
+            } catch (e) {
+                console.error("Error fetching Google Sheet", e);
+                return [];
+            }
+        }
+
+        async function updateDashboard() {
+            document.getElementById('last-updated').innerHTML = '<div class="loading-spinner"></div> Updating scores...';
+
+            const poolTeams = await fetchTeamsFromSheet();
+            if (poolTeams.length === 0) {
+                document.getElementById('last-updated').innerText = "Error: Could not load teams from Google Sheet.";
+                return;
+            }
+
+            try {
+                const response = await fetch(API_URL);
+                const data = await response.json();
+                const leaderboard = data.players;
+                const cutLine = parseInt(data.cut_line) || 0;
+
+                document.getElementById('cut-line-display').innerText = `Projected Cut: ${cutLine > 0 ? '+' + cutLine : cutLine === 0 ? 'E' : cutLine}`;
+
+                const teamResults = poolTeams.map(team => {
+                    let teamTotal = 0;
+                    let golferDetails = team.golfers.map(name => {
+                        const player = leaderboard.find(p => p.name.toLowerCase().includes(name.toLowerCase())) || 
+                                       { score: 0, missed_cut: false, name: name + " (?)" };
+                        
+                        let rawScore = parseInt(player.score) || 0;
+                        let displayScore = rawScore;
+                        let appliedCutRule = false;
+
+                        // THE CUT RULE: If they made the cut but are worse than the cut line
+                        if (!player.missed_cut && rawScore > cutLine) {
+                            displayScore = cutLine;
+                            appliedCutRule = true;
+                        }
+                        
+                        teamTotal += displayScore;
+                        return { name: player.name, rawScore, displayScore, appliedCutRule, missedCut: player.missed_cut };
+                    });
+
+                    return { ...team, total: teamTotal, players: golferDetails };
+                });
+
+                // Sort by score
+                teamResults.sort((a, b) => a.total - b.total);
+
+                const container = document.getElementById('teams-container');
+                container.innerHTML = '';
+
+                teamResults.forEach(team => {
+                    const card = document.createElement('div');
+                    card.className = 'card p-6 border-t-4 border-green-700';
+                    let html = `
+                        <div class="flex justify-between items-center mb-4 border-b pb-2">
+                            <h2 class="text-xl font-bold">${team.owner}</h2>
+                            <span class="text-2xl font-black ${team.total <= 0 ? 'text-red-600' : 'text-gray-800'}">
+                                ${team.total > 0 ? '+' + team.total : team.total === 0 ? 'E' : team.total}
+                            </span>
+                        </div>
+                        <table class="w-full text-sm">
+                            <tr class="text-left text-gray-400 text-xs"><th>Player</th><th class="text-right">Live</th><th class="text-right">Pool</th></tr>
+                    `;
+
+                    team.players.forEach(p => {
+                        const scoreClass = p.displayScore < 0 ? 'score-under' : (p.displayScore === 0 ? 'score-even' : 'score-over');
+                        html += `
+                            <tr class="border-b last:border-0">
+                                <td class="py-2 ${p.missedCut ? 'line-through text-gray-400' : ''}">
+                                    ${p.name} ${p.appliedCutRule ? ' <span class="text-blue-500 text-[10px] font-bold underline italic">CAP</span>' : ''}
+                                </td>
+                                <td class="text-right text-gray-400">${p.rawScore > 0 ? '+' + p.rawScore : p.rawScore}</td>
+                                <td class="text-right font-bold ${scoreClass}">${p.displayScore > 0 ? '+' + p.displayScore : p.displayScore === 0 ? 'E' : p.displayScore}</td>
+                            </tr>
+                        `;
+                    });
+                    card.innerHTML = html + `</table>`;
+                    container.appendChild(card);
+                });
+
+                document.getElementById('last-updated').innerText = `Last Updated: ${new Date().toLocaleTimeString()}`;
+
+            } catch (error) {
+                document.getElementById('last-updated').innerText = "Error fetching live leaderboard.";
+            }
+        }
+
+        // Refresh every 2 minutes
+        updateDashboard();
+        setInterval(updateDashboard, 120000);
+    </script>
+</body>
+</html>
