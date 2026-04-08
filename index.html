@@ -13,7 +13,7 @@
         }
         body {
             font-family: 'Inter', sans-serif;
-            background: linear-gradient(rgba(0, 103, 71, 0.88), rgba(0, 103, 71, 0.88)), 
+            background: linear-gradient(rgba(0, 103, 71, 0.9), rgba(0, 103, 71, 0.9)), 
                         url('https://images.unsplash.com/photo-1587174486073-ae5e5cff23aa?ixlib=rb-4.0.3&auto=format&fit=crop&w=2000&q=80');
             background-size: cover;
             background-attachment: fixed;
@@ -30,7 +30,6 @@
             border-radius: 2px;
             border-top: 6px solid var(--masters-yellow);
             box-shadow: 0 10px 25px rgba(0,0,0,0.3);
-            transition: transform 0.2s;
         }
 
         .leaderboard-header {
@@ -54,8 +53,7 @@
             border: 3px solid rgba(255,255,255,0.3);
             border-top: 3px solid var(--masters-yellow);
             border-radius: 50%;
-            width: 20px;
-            height: 20px;
+            width: 20px; height: 20px;
             animation: spin 1s linear infinite;
         }
         @keyframes spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }
@@ -64,39 +62,36 @@
 <body class="min-h-screen p-4 md:p-8">
 
     <div class="max-w-6xl mx-auto">
-        <header class="text-center mb-12">
-            <!-- Masters SVG Logo -->
-            <div class="inline-block mb-6">
-                <div class="bg-white p-6 rounded-full shadow-2xl">
-                    <svg width="100" height="70" viewBox="0 0 100 65" fill="none" xmlns="http://www.w3.org/2000/svg">
-                        <path d="M95.5 28.5C93.5 14.5 78.5 5 50 5C21.5 5 6.5 14.5 4.5 28.5C2.5 42.5 17.5 52 46 52L48 60L52 60L54 52C82.5 52 97.5 42.5 95.5 28.5Z" fill="#006747"/>
-                        <path d="M50 8C74 8 87 16 88.5 28.5C90 41 77 49 50 49C23 49 10 41 11.5 28.5C13 16 26 8 50 8Z" fill="#ffcc00" stroke="#006747" stroke-width="1"/>
-                        <path d="M51 18V40" stroke="#d91e18" stroke-width="2" stroke-linecap="round"/>
-                        <path d="M51 19L62 24L51 29" fill="#d91e18"/>
-                    </svg>
+        <header class="text-center mb-10">
+            <!-- Official Masters Logo -->
+            <div class="flex justify-center mb-6">
+                <div class="bg-white p-2 rounded-lg shadow-2xl">
+                    <img src="https://i0.wp.com/huskybulletin.com/wp-content/uploads/2025/04/masters-emblem.png?fit=1200%2C675&ssl=1" 
+                         alt="Masters Logo" 
+                         class="h-24 md:h-32 w-auto object-contain">
                 </div>
             </div>
             
-            <h1 class="text-5xl md:text-6xl text-white drop-shadow-lg mb-2 uppercase tracking-tight">Masters Pool 2026</h1>
+            <h1 class="text-4xl md:text-6xl text-white drop-shadow-lg mb-2 uppercase tracking-tight">Masters Pool 2026</h1>
             
             <div id="cut-line-display" class="bg-yellow-400 text-green-900 px-6 py-1 rounded-full font-black inline-block shadow-lg uppercase tracking-widest text-sm">
-                Projected Cut: --
+                Tournament Starts Soon
             </div>
             
             <p id="last-updated" class="text-green-100 text-sm mt-4 flex justify-center items-center gap-2 italic">
-                Syncing with official data...
+                Ready for Tee Off...
             </p>
         </header>
 
         <!-- Legend -->
         <div id="legend-bar" class="max-w-md mx-auto mb-10 bg-white/10 backdrop-blur-md p-3 rounded text-white text-xs flex justify-around border border-white/20 hidden">
-            <span><strong class="text-yellow-400 text-sm">•</strong> Under Par (Red)</span>
-            <span><strong class="text-blue-300 text-sm">•</strong> Cut Cap Applied</span>
-            <span><strong class="italic text-white text-sm">•</strong> Missed Cut</span>
+            <span><strong class="text-yellow-400">•</strong> Under Par (Red)</span>
+            <span><strong class="text-blue-300">•</strong> Cut Cap</span>
+            <span><strong class="italic text-white">•</strong> Missed Cut</span>
         </div>
 
         <div id="teams-container" class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8">
-            <!-- Team Data Loaded via JS -->
+            <!-- JavaScript will inject cards here -->
         </div>
     </div>
 
@@ -134,11 +129,11 @@
             const container = document.getElementById('teams-container');
             const legendBar = document.getElementById('legend-bar');
             
-            statusEl.innerHTML = '<div class="loading-spinner"></div> Fetching 2026 Leaderboard...';
+            statusEl.innerHTML = '<div class="loading-spinner"></div> Updating...';
 
             const poolTeams = await fetchTeamsFromSheet();
             if (poolTeams.length === 0) {
-                statusEl.innerText = "Error: Check Google Sheets Publication.";
+                statusEl.innerText = "Error loading teams.";
                 return;
             }
 
@@ -150,19 +145,16 @@
                 const response = await fetch(API_URL);
                 const data = await response.json();
                 
-                // Detection if tournament has actually begun
+                // If the first player has a score, we consider the tournament live
                 if (data.players && data.players.length > 0 && data.players[0].score !== null) {
                     leaderboard = data.players;
                     cutLine = parseInt(data.cut_line) || 0;
                     tournamentStarted = true;
                     document.getElementById('cut-line-display').innerText = `Projected Cut: ${cutLine > 0 ? '+' + cutLine : (cutLine === 0 ? 'E' : cutLine)}`;
                     legendBar.classList.remove('hidden');
-                } else {
-                    document.getElementById('cut-line-display').innerText = `Tournament Starts Soon`;
-                    legendBar.classList.add('hidden');
                 }
             } catch (error) {
-                document.getElementById('cut-line-display').innerText = `Syncing Scores`;
+                console.log("No live data yet.");
             }
 
             const teamResults = poolTeams.map(team => {
@@ -176,7 +168,7 @@
                     let displayScore = rawScore;
                     let appliedCutRule = false;
 
-                    // Apply Cut Rule logic for weekend players
+                    // CUT RULE LOGIC: If player is NOT cut but score is worse than the cut line
                     if (tournamentStarted && !player.missed_cut && rawScore > cutLine) {
                         displayScore = cutLine;
                         appliedCutRule = true;
@@ -188,7 +180,6 @@
                 return { ...team, total: teamTotal, players: golferDetails };
             });
 
-            // Only sort teams by score once play begins
             if (tournamentStarted) teamResults.sort((a, b) => a.total - b.total);
 
             container.innerHTML = '';
@@ -225,7 +216,7 @@
                     html += `
                         <table class="w-full text-sm">
                             <tr class="text-left text-gray-400 border-b text-[10px] uppercase font-bold tracking-widest">
-                                <th class="pb-2">Golfer</th><th class="pb-2 text-right">Actual</th><th class="pb-2 text-right">Pool</th>
+                                <th class="pb-2">Golfer</th><th class="pb-2 text-right">Live</th><th class="pb-2 text-right">Pool</th>
                             </tr>
                     `;
                     team.players.forEach(p => {
@@ -251,7 +242,7 @@
         }
 
         updateDashboard();
-        setInterval(updateDashboard, 120000); // 2-minute refresh cycle
+        setInterval(updateDashboard, 120000);
     </script>
 </body>
 </html>
