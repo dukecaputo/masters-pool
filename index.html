@@ -13,7 +13,7 @@
         }
         body {
             font-family: 'Inter', sans-serif;
-            background: linear-gradient(rgba(0, 103, 71, 0.85), rgba(0, 103, 71, 0.85)), 
+            background: linear-gradient(rgba(0, 103, 71, 0.88), rgba(0, 103, 71, 0.88)), 
                         url('https://images.unsplash.com/photo-1587174486073-ae5e5cff23aa?ixlib=rb-4.0.3&auto=format&fit=crop&w=2000&q=80');
             background-size: cover;
             background-attachment: fixed;
@@ -65,31 +65,38 @@
 
     <div class="max-w-6xl mx-auto">
         <header class="text-center mb-12">
-            <div class="inline-block mb-4">
-                <div class="bg-white p-2 rounded-full shadow-xl">
-                    <div class="w-16 h-16 rounded-full border-2 border-green-800 flex items-center justify-center bg-green-50">
-                        <span class="text-green-800 font-black text-2xl">M</span>
-                    </div>
+            <!-- Masters SVG Logo -->
+            <div class="inline-block mb-6">
+                <div class="bg-white p-6 rounded-full shadow-2xl">
+                    <svg width="100" height="70" viewBox="0 0 100 65" fill="none" xmlns="http://www.w3.org/2000/svg">
+                        <path d="M95.5 28.5C93.5 14.5 78.5 5 50 5C21.5 5 6.5 14.5 4.5 28.5C2.5 42.5 17.5 52 46 52L48 60L52 60L54 52C82.5 52 97.5 42.5 95.5 28.5Z" fill="#006747"/>
+                        <path d="M50 8C74 8 87 16 88.5 28.5C90 41 77 49 50 49C23 49 10 41 11.5 28.5C13 16 26 8 50 8Z" fill="#ffcc00" stroke="#006747" stroke-width="1"/>
+                        <path d="M51 18V40" stroke="#d91e18" stroke-width="2" stroke-linecap="round"/>
+                        <path d="M51 19L62 24L51 29" fill="#d91e18"/>
+                    </svg>
                 </div>
             </div>
-            <h1 class="text-5xl md:text-6xl text-white drop-shadow-lg mb-2">Masters Pool 2026</h1>
+            
+            <h1 class="text-5xl md:text-6xl text-white drop-shadow-lg mb-2 uppercase tracking-tight">Masters Pool 2026</h1>
+            
             <div id="cut-line-display" class="bg-yellow-400 text-green-900 px-6 py-1 rounded-full font-black inline-block shadow-lg uppercase tracking-widest text-sm">
                 Projected Cut: --
             </div>
+            
             <p id="last-updated" class="text-green-100 text-sm mt-4 flex justify-center items-center gap-2 italic">
-                Syncing with Google Sheets...
+                Syncing with official data...
             </p>
         </header>
 
         <!-- Legend -->
         <div id="legend-bar" class="max-w-md mx-auto mb-10 bg-white/10 backdrop-blur-md p-3 rounded text-white text-xs flex justify-around border border-white/20 hidden">
-            <span><strong class="text-yellow-400">RED:</strong> Under Par</span>
-            <span><strong class="text-blue-300">CAP:</strong> Cut Rule</span>
-            <span><strong class="italic text-white">ITALIC:</strong> Missed Cut</span>
+            <span><strong class="text-yellow-400 text-sm">•</strong> Under Par (Red)</span>
+            <span><strong class="text-blue-300 text-sm">•</strong> Cut Cap Applied</span>
+            <span><strong class="italic text-white text-sm">•</strong> Missed Cut</span>
         </div>
 
         <div id="teams-container" class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8">
-            <!-- Data will load here -->
+            <!-- Team Data Loaded via JS -->
         </div>
     </div>
 
@@ -127,11 +134,11 @@
             const container = document.getElementById('teams-container');
             const legendBar = document.getElementById('legend-bar');
             
-            statusEl.innerHTML = '<div class="loading-spinner"></div> Refreshing...';
+            statusEl.innerHTML = '<div class="loading-spinner"></div> Fetching 2026 Leaderboard...';
 
             const poolTeams = await fetchTeamsFromSheet();
             if (poolTeams.length === 0) {
-                statusEl.innerText = "Error loading teams from Google Sheet.";
+                statusEl.innerText = "Error: Check Google Sheets Publication.";
                 return;
             }
 
@@ -142,7 +149,8 @@
             try {
                 const response = await fetch(API_URL);
                 const data = await response.json();
-                // We check if the leaderboard contains actual data (if tournament has begun)
+                
+                // Detection if tournament has actually begun
                 if (data.players && data.players.length > 0 && data.players[0].score !== null) {
                     leaderboard = data.players;
                     cutLine = parseInt(data.cut_line) || 0;
@@ -154,7 +162,7 @@
                     legendBar.classList.add('hidden');
                 }
             } catch (error) {
-                document.getElementById('cut-line-display').innerText = `Waiting for Scores`;
+                document.getElementById('cut-line-display').innerText = `Syncing Scores`;
             }
 
             const teamResults = poolTeams.map(team => {
@@ -168,6 +176,7 @@
                     let displayScore = rawScore;
                     let appliedCutRule = false;
 
+                    // Apply Cut Rule logic for weekend players
                     if (tournamentStarted && !player.missed_cut && rawScore > cutLine) {
                         displayScore = cutLine;
                         appliedCutRule = true;
@@ -179,6 +188,7 @@
                 return { ...team, total: teamTotal, players: golferDetails };
             });
 
+            // Only sort teams by score once play begins
             if (tournamentStarted) teamResults.sort((a, b) => a.total - b.total);
 
             container.innerHTML = '';
@@ -189,7 +199,7 @@
                 let html = `
                     <div class="leaderboard-header flex justify-between items-center">
                         <div>
-                            <span class="text-xs uppercase tracking-tighter opacity-80">${tournamentStarted ? 'Rank #' + (index + 1) : 'Team Entry'}</span>
+                            <span class="text-xs uppercase tracking-tighter opacity-80">${tournamentStarted ? 'Rank #' + (index + 1) : 'Official Entry'}</span>
                             <h2 class="text-xl leading-tight">${team.owner}</h2>
                         </div>
                         <div class="text-right">
@@ -202,22 +212,20 @@
                 `;
 
                 if (!tournamentStarted) {
-                    // PRE-TOURNAMENT VIEW: Show a locked message
                     html += `
                         <div class="py-10 text-center">
-                            <div class="text-green-800 opacity-20 mb-2">
-                                <svg class="w-12 h-12 mx-auto" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z"></path></svg>
+                            <div class="text-green-800 opacity-10 mb-2">
+                                <svg class="w-12 h-12 mx-auto" fill="currentColor" viewBox="0 0 20 20"><path fill-rule="evenodd" d="M5 9V7a5 5 0 0110 0v2a2 2 0 012 2v5a2 2 0 01-2 2H5a2 2 0 01-2-2v-5a2 2 0 012-2zm8-2v2H7V7a3 3 0 016 0z" clip-rule="evenodd"></path></svg>
                             </div>
                             <p class="text-xs font-bold text-green-900 uppercase tracking-widest">Roster Locked</p>
-                            <p class="text-[10px] text-gray-500 italic mt-1 px-4">Golfer picks will be revealed once the tournament begins.</p>
+                            <p class="text-[10px] text-gray-400 italic mt-1 px-4 italic">Revealing Thursday Morning</p>
                         </div>
                     `;
                 } else {
-                    // TOURNAMENT LIVE VIEW: Show the roster
                     html += `
                         <table class="w-full text-sm">
                             <tr class="text-left text-gray-400 border-b text-[10px] uppercase font-bold tracking-widest">
-                                <th class="pb-2">Golfer</th><th class="pb-2 text-right">Live</th><th class="pb-2 text-right">Pool</th>
+                                <th class="pb-2">Golfer</th><th class="pb-2 text-right">Actual</th><th class="pb-2 text-right">Pool</th>
                             </tr>
                     `;
                     team.players.forEach(p => {
@@ -239,11 +247,11 @@
                 container.appendChild(card);
             });
 
-            statusEl.innerText = tournamentStarted ? `Last Updated: ${new Date().toLocaleTimeString()}` : "Waiting for rosters to unlock on Thursday...";
+            statusEl.innerText = tournamentStarted ? `Last Updated: ${new Date().toLocaleTimeString()}` : "Ready for the 2026 Masters Tournament";
         }
 
         updateDashboard();
-        setInterval(updateDashboard, 120000);
+        setInterval(updateDashboard, 120000); // 2-minute refresh cycle
     </script>
 </body>
 </html>
