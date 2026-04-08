@@ -39,6 +39,18 @@
             border-bottom: 3px solid var(--masters-yellow);
         }
 
+        .rank-badge {
+            background: rgba(255, 255, 255, 0.2);
+            padding: 2px 8px;
+            border-radius: 4px;
+            font-family: 'Inter', sans-serif;
+            font-size: 0.75rem;
+            font-weight: 900;
+            letter-spacing: 0.05em;
+            margin-right: 10px;
+            border: 1px solid rgba(255, 255, 255, 0.3);
+        }
+
         .cut-badge {
             background: var(--masters-yellow);
             color: var(--masters-green);
@@ -63,7 +75,6 @@
 
     <div class="max-w-6xl mx-auto">
         <header class="text-center mb-10">
-            <!-- Official Masters Logo -->
             <div class="flex justify-center mb-6">
                 <div class="bg-white p-2 rounded-lg shadow-2xl">
                     <img src="https://i0.wp.com/huskybulletin.com/wp-content/uploads/2025/04/masters-emblem.png?fit=1200%2C675&ssl=1" 
@@ -83,21 +94,26 @@
             </p>
         </header>
 
-        <!-- Legend -->
+        <!-- Legend (Only shows when live) -->
         <div id="legend-bar" class="max-w-md mx-auto mb-10 bg-white/10 backdrop-blur-md p-3 rounded text-white text-xs flex justify-around border border-white/20 hidden">
             <span><strong class="text-yellow-400">•</strong> Under Par (Red)</span>
             <span><strong class="text-blue-300">•</strong> Cut Cap</span>
             <span><strong class="italic text-white">•</strong> Missed Cut</span>
         </div>
 
-        <div id="teams-container" class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8">
-            <!-- JavaScript will inject cards here -->
-        </div>
+        <div id="teams-container" class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8"></div>
     </div>
 
     <script>
         const SHEET_CSV_URL = 'https://docs.google.com/spreadsheets/d/e/2PACX-1vRNUYd3Yuvmvt0Uc9Ov54IguAwMgXPehvt7tjDBUonuQpKu1e6zmQNWDdGMCSWfU8zslFHi90T7AEzc/pub?gid=0&single=true&output=csv';
         const API_URL = "https://champs-api.vercel.app/api/masters"; 
+
+        // Helper for rank suffixes (1st, 2nd, etc)
+        function getOrdinal(n) {
+            let s = ["th", "st", "nd", "rd"],
+                v = n % 100;
+            return n + (s[(v - 20) % 10] || s[v] || s[0]);
+        }
 
         function parseCSV(text) {
             const lines = text.split(/\r?\n/);
@@ -144,8 +160,6 @@
             try {
                 const response = await fetch(API_URL);
                 const data = await response.json();
-                
-                // If the first player has a score, we consider the tournament live
                 if (data.players && data.players.length > 0 && data.players[0].score !== null) {
                     leaderboard = data.players;
                     cutLine = parseInt(data.cut_line) || 0;
@@ -153,9 +167,7 @@
                     document.getElementById('cut-line-display').innerText = `Projected Cut: ${cutLine > 0 ? '+' + cutLine : (cutLine === 0 ? 'E' : cutLine)}`;
                     legendBar.classList.remove('hidden');
                 }
-            } catch (error) {
-                console.log("No live data yet.");
-            }
+            } catch (error) { console.log("API not live."); }
 
             const teamResults = poolTeams.map(team => {
                 let teamTotal = 0;
@@ -168,7 +180,6 @@
                     let displayScore = rawScore;
                     let appliedCutRule = false;
 
-                    // CUT RULE LOGIC: If player is NOT cut but score is worse than the cut line
                     if (tournamentStarted && !player.missed_cut && rawScore > cutLine) {
                         displayScore = cutLine;
                         appliedCutRule = true;
@@ -180,17 +191,34 @@
                 return { ...team, total: teamTotal, players: golferDetails };
             });
 
-            if (tournamentStarted) teamResults.sort((a, b) => a.total - b.total);
+            // Sorting and Rank Calculation
+            if (tournamentStarted) {
+                teamResults.sort((a, b) => a.total - b.total);
+                
+                let currentRank = 1;
+                teamResults.forEach((team, index) => {
+                    // If score is different from previous, update the rank to current index + 1
+                    if (index > 0 && team.total > teamResults[index - 1].total) {
+                        currentRank = index + 1;
+                    }
+                    
+                    // Check for ties
+                    const isTie = (index > 0 && team.total === teamResults[index - 1].total) || 
+                                  (index < teamResults.length - 1 && team.total === teamResults[index + 1].total);
+                    
+                    team.rankDisplay = (isTie ? "T" : "") + getOrdinal(currentRank);
+                });
+            }
 
             container.innerHTML = '';
-            teamResults.forEach((team, index) => {
+            teamResults.forEach((team) => {
                 const card = document.createElement('div');
                 card.className = 'masters-card overflow-hidden';
                 
                 let html = `
                     <div class="leaderboard-header flex justify-between items-center">
-                        <div>
-                            <span class="text-xs uppercase tracking-tighter opacity-80">${tournamentStarted ? 'Rank #' + (index + 1) : 'Official Entry'}</span>
+                        <div class="flex items-center">
+                            ${tournamentStarted ? `<span class="rank-badge">${team.rankDisplay}</span>` : ''}
                             <h2 class="text-xl leading-tight">${team.owner}</h2>
                         </div>
                         <div class="text-right">
@@ -204,14 +232,10 @@
 
                 if (!tournamentStarted) {
                     html += `
-                        <div class="py-10 text-center">
-                            <div class="text-green-800 opacity-10 mb-2">
-                                <svg class="w-12 h-12 mx-auto" fill="currentColor" viewBox="0 0 20 20"><path fill-rule="evenodd" d="M5 9V7a5 5 0 0110 0v2a2 2 0 012 2v5a2 2 0 01-2 2H5a2 2 0 01-2-2v-5a2 2 0 012-2zm8-2v2H7V7a3 3 0 016 0z" clip-rule="evenodd"></path></svg>
-                            </div>
-                            <p class="text-xs font-bold text-green-900 uppercase tracking-widest">Roster Locked</p>
-                            <p class="text-[10px] text-gray-400 italic mt-1 px-4 italic">Revealing Thursday Morning</p>
-                        </div>
-                    `;
+                        <div class="py-10 text-center text-green-800 opacity-20">
+                            <svg class="w-12 h-12 mx-auto" fill="currentColor" viewBox="0 0 20 20"><path fill-rule="evenodd" d="M5 9V7a5 5 0 0110 0v2a2 2 0 012 2v5a2 2 0 01-2 2H5a2 2 0 01-2-2v-5a2 2 0 012-2zm8-2v2H7V7a3 3 0 016 0z" clip-rule="evenodd"></path></svg>
+                            <p class="text-xs font-bold uppercase mt-2 tracking-widest">Locked</p>
+                        </div>`;
                 } else {
                     html += `
                         <table class="w-full text-sm">
