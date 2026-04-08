@@ -3,240 +3,161 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Masters Live Pool Tracker</title>
+    <title>Masters Pool - TEST MODE</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <link href="https://fonts.googleapis.com/css2?family=Playfair+Display:wght@700&family=Inter:wght@400;700;900&display=swap" rel="stylesheet">
     <style>
-        :root {
-            --masters-green: #006747;
-            --masters-yellow: #ffcc00;
-        }
+        :root { --masters-green: #006747; --masters-yellow: #ffcc00; }
         body {
             font-family: 'Inter', sans-serif;
             background: linear-gradient(rgba(0, 103, 71, 0.85), rgba(0, 103, 71, 0.85)), 
                         url('https://images.unsplash.com/photo-1587174486073-ae5e5cff23aa?ixlib=rb-4.0.3&auto=format&fit=crop&w=2000&q=80');
-            background-size: cover;
-            background-attachment: fixed;
-            background-position: center;
+            background-size: cover; background-attachment: fixed;
         }
         h1, h2 { font-family: 'Playfair Display', serif; }
-        
         .score-under { color: #d91e18; font-weight: 800; }
         .score-even { color: #27ae60; font-weight: 800; }
         .score-over { color: #2c3e50; font-weight: 800; }
-
-        .masters-card {
-            background: rgba(255, 255, 255, 0.95);
-            border-radius: 2px;
-            border-top: 6px solid var(--masters-yellow);
-            box-shadow: 0 10px 25px rgba(0,0,0,0.3);
-            transition: transform 0.2s;
-        }
-
-        .leaderboard-header {
-            background-color: var(--masters-green);
-            color: white;
-            padding: 1rem;
-            border-bottom: 3px solid var(--masters-yellow);
-        }
-
-        .cut-badge {
-            background: var(--masters-yellow);
-            color: var(--masters-green);
-            font-weight: 900;
-            padding: 2px 8px;
-            border-radius: 4px;
-            font-size: 0.7rem;
-            text-transform: uppercase;
-        }
-
-        .loading-spinner {
-            border: 3px solid rgba(255,255,255,0.3);
-            border-top: 3px solid var(--masters-yellow);
-            border-radius: 50%;
-            width: 20px;
-            height: 20px;
-            animation: spin 1s linear infinite;
-        }
-        @keyframes spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }
+        .masters-card { background: rgba(255, 255, 255, 0.95); border-top: 6px solid var(--masters-yellow); box-shadow: 0 10px 25px rgba(0,0,0,0.3); }
+        .leaderboard-header { background-color: var(--masters-green); color: white; padding: 1rem; border-bottom: 3px solid var(--masters-yellow); }
+        .cut-badge { background: var(--masters-yellow); color: var(--masters-green); font-weight: 900; padding: 2px 8px; border-radius: 4px; font-size: 0.7rem; text-transform: uppercase; }
     </style>
 </head>
 <body class="min-h-screen p-4 md:p-8">
 
     <div class="max-w-6xl mx-auto">
         <header class="text-center mb-12">
-            <div class="inline-block mb-4">
-                <div class="bg-white p-2 rounded-full shadow-xl">
-                    <div class="w-16 h-16 rounded-full border-2 border-green-800 flex items-center justify-center bg-green-50">
-                        <span class="text-green-800 font-black text-2xl">M</span>
-                    </div>
-                </div>
-            </div>
+            <div id="test-banner" class="bg-red-600 text-white text-xs font-bold py-1 mb-4 uppercase tracking-widest hidden">Test Mode Active - Using Dummy Data</div>
             <h1 class="text-5xl md:text-6xl text-white drop-shadow-lg mb-2">Masters Pool 2024</h1>
-            <div id="cut-line-display" class="bg-yellow-400 text-green-900 px-6 py-1 rounded-full font-black inline-block shadow-lg uppercase tracking-widest text-sm">
-                Projected Cut: --
-            </div>
-            <p id="last-updated" class="text-green-100 text-sm mt-4 flex justify-center items-center gap-2 italic">
-                Connecting to Google Sheets...
-            </p>
+            <div id="cut-line-display" class="bg-yellow-400 text-green-900 px-6 py-1 rounded-full font-black inline-block shadow-lg uppercase tracking-widest text-sm">Projected Cut: --</div>
+            <p id="last-updated" class="text-green-100 text-sm mt-4 italic">Syncing...</p>
         </header>
 
-        <div id="teams-container" class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8">
-            <!-- Data will load here -->
-        </div>
+        <div id="teams-container" class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8"></div>
     </div>
 
     <script>
+        // --- CONFIGURATION ---
         const SHEET_CSV_URL = 'https://docs.google.com/spreadsheets/d/e/2PACX-1vRNUYd3Yuvmvt0Uc9Ov54IguAwMgXPehvt7tjDBUonuQpKu1e6zmQNWDdGMCSWfU8zslFHi90T7AEzc/pub?gid=0&single=true&output=csv';
         const API_URL = "https://champs-api.vercel.app/api/masters"; 
+        
+        // SET THIS TO FALSE WHEN THE TOURNAMENT STARTS
+        const TEST_MODE = true; 
+
+        // --- DUMMY DATA FOR TESTING ---
+        const DUMMY_CUT_LINE = 2; // +2 is the cut line
+        const DUMMY_LEADERBOARD = [
+            { name: "Jon Rahm", score: -5, missed_cut: false },      // Great score
+            { name: "Ludvig Åberg", score: 0, missed_cut: false },  // Even
+            { name: "Tommy Fleetwood", score: 2, missed_cut: false }, // At the cut
+            { name: "Kurt Kitayama", score: 10, missed_cut: false }, // SHOULD BE CAPPED AT +2
+            { name: "Sam Stevens", score: 6, missed_cut: false },   // SHOULD BE CAPPED AT +2
+            { name: "Nicolai Højgaard", score: 2, missed_cut: false },
+            { name: "Akshay Bhatia", score: -2, missed_cut: false },
+            { name: "Michael Kim", score: 8, missed_cut: true },    // Missed Cut (Score should stay +8)
+            { name: "Fifa Laopakdee", score: -1, missed_cut: false }
+        ];
 
         function parseCSV(text) {
             const lines = text.split(/\r?\n/);
-            return lines.map(line => {
-                const values = line.split(/,(?=(?:(?:[^"]*"){2})*[^"]*$)/);
-                return values.map(v => v.replace(/^"|"$/g, '').trim());
-            }).filter(row => row.length > 1 && row[0] !== "");
+            return lines.map(line => line.split(',').map(v => v.replace(/^"|"$/g, '').trim()))
+                        .filter(row => row.length > 1 && row[0] !== "");
         }
 
-        async function fetchTeamsFromSheet() {
+        async function updateDashboard() {
+            if (TEST_MODE) document.getElementById('test-banner').classList.remove('hidden');
+            
+            const statusEl = document.getElementById('last-updated');
+            const container = document.getElementById('teams-container');
+
+            // 1. Get Teams (From your real Google Sheet)
+            let poolTeams = [];
             try {
                 const response = await fetch(SHEET_CSV_URL);
                 const csvText = await response.text();
                 let rows = parseCSV(csvText);
-                if (rows.length === 0) return [];
-                const firstCell = rows[0][0].toLowerCase();
-                if (firstCell.includes("team") || firstCell.includes("owner") || firstCell.includes("name")) {
-                    rows = rows.slice(1);
-                }
-                return rows.map(row => ({
-                    owner: row[0],
-                    golfers: row.slice(1, 10).filter(name => name !== "")
-                }));
-            } catch (e) { 
-                console.error("Sheet Error:", e);
-                return []; 
-            }
-        }
+                if (rows[0][0].toLowerCase().includes("team")) rows = rows.slice(1);
+                poolTeams = rows.map(row => ({ owner: row[0], golfers: row.slice(1, 10) }));
+            } catch (e) { statusEl.innerText = "Error loading Sheet."; return; }
 
-        async function updateDashboard() {
-            const statusEl = document.getElementById('last-updated');
-            const container = document.getElementById('teams-container');
-            
-            // 1. Fetch the Teams first (This is our core data)
-            const poolTeams = await fetchTeamsFromSheet();
-            if (poolTeams.length === 0) {
-                statusEl.innerText = "Error: Check your Google Sheet URL.";
-                return;
-            }
-
-            // 2. Try to fetch Live Leaderboard
+            // 2. Get Scores (Live or Dummy)
             let leaderboard = [];
             let cutLine = 0;
-            let tournamentStarted = false;
 
-            try {
-                const response = await fetch(API_URL);
-                const data = await response.json();
-                if (data.players && data.players.length > 0) {
-                    leaderboard = data.players;
+            if (TEST_MODE) {
+                leaderboard = DUMMY_LEADERBOARD;
+                cutLine = DUMMY_CUT_LINE;
+            } else {
+                try {
+                    const response = await fetch(API_URL);
+                    const data = await response.json();
+                    leaderboard = data.players || [];
                     cutLine = parseInt(data.cut_line) || 0;
-                    tournamentStarted = true;
-                    document.getElementById('cut-line-display').innerText = `Projected Cut: ${cutLine > 0 ? '+' + cutLine : (cutLine === 0 ? 'E' : cutLine)}`;
-                } else {
-                    document.getElementById('cut-line-display').innerText = `Tournament Starts Soon`;
-                }
-            } catch (error) {
-                console.log("Leaderboard not live yet. Using pre-tournament mode.");
-                document.getElementById('cut-line-display').innerText = `Waiting for Tee Off`;
+                } catch (e) { console.log("API not live yet."); }
             }
 
-            // 3. Process the results (Works whether tournament is live or not)
+            document.getElementById('cut-line-display').innerText = `Projected Cut: ${cutLine > 0 ? '+' + cutLine : (cutLine === 0 ? 'E' : cutLine)}`;
+
+            // 3. Process Logic
             const teamResults = poolTeams.map(team => {
                 let teamTotal = 0;
                 let golferDetails = team.golfers.map(name => {
-                    // Look for golfer in leaderboard if started, otherwise default to Even (0)
-                    const player = leaderboard.find(p => 
-                        p.name.toLowerCase().replace(/\s/g, '').includes(name.toLowerCase().replace(/\s/g, ''))
-                    ) || { score: 0, missed_cut: false, name: name };
+                    const player = leaderboard.find(p => p.name.toLowerCase().includes(name.toLowerCase())) 
+                                   || { score: 0, missed_cut: false, name: name };
                     
                     let rawScore = parseInt(player.score) || 0;
                     let displayScore = rawScore;
                     let appliedCutRule = false;
 
-                    // Only apply cut rule if tournament is live and players have scores
-                    if (tournamentStarted && !player.missed_cut && rawScore > cutLine) {
+                    // RULE: If player made the cut BUT score is worse than cut line, cap it.
+                    if (!player.missed_cut && rawScore > cutLine) {
                         displayScore = cutLine;
                         appliedCutRule = true;
                     }
                     
                     teamTotal += displayScore;
-                    return { 
-                        name: player.name || name, 
-                        rawScore, 
-                        displayScore, 
-                        appliedCutRule, 
-                        missedCut: player.missed_cut 
-                    };
+                    return { name: player.name, rawScore, displayScore, appliedCutRule, missedCut: player.missed_cut };
                 });
                 return { ...team, total: teamTotal, players: golferDetails };
             });
 
-            // Sort teams (if no scores, this just keeps them alphabetical)
             teamResults.sort((a, b) => a.total - b.total);
 
-            // 4. Render the UI
+            // 4. Render
             container.innerHTML = '';
             teamResults.forEach((team, index) => {
                 const card = document.createElement('div');
                 card.className = 'masters-card overflow-hidden';
-                
                 let html = `
                     <div class="leaderboard-header flex justify-between items-center">
-                        <div>
-                            <span class="text-xs uppercase tracking-tighter opacity-80">${tournamentStarted ? 'Rank #' + (index + 1) : 'Team'}</span>
-                            <h2 class="text-xl leading-tight">${team.owner}</h2>
-                        </div>
+                        <div><h2 class="text-xl leading-tight">${team.owner}</h2></div>
                         <div class="text-right">
                             <span class="text-3xl font-black ${team.total < 0 ? 'text-red-400' : 'text-white'}">
-                                ${!tournamentStarted ? 'E' : (team.total > 0 ? '+' + team.total : (team.total === 0 ? 'E' : team.total))}
+                                ${team.total > 0 ? '+' + team.total : (team.total === 0 ? 'E' : team.total)}
                             </span>
                         </div>
                     </div>
-                    <div class="p-4 bg-white">
-                        <table class="w-full text-sm">
-                            <tr class="text-left text-gray-400 border-b text-[10px] uppercase font-bold tracking-widest">
-                                <th class="pb-2">Golfer</th>
-                                <th class="pb-2 text-right">Actual</th>
-                                <th class="pb-2 text-right">Pool</th>
-                            </tr>
+                    <div class="p-4 bg-white"><table class="w-full text-sm">
+                        <tr class="text-left text-gray-400 border-b text-[10px] uppercase font-bold tracking-widest"><th class="pb-2">Golfer</th><th class="pb-2 text-right">Actual</th><th class="pb-2 text-right">Pool</th></tr>
                 `;
-
                 team.players.forEach(p => {
                     const scoreClass = p.displayScore < 0 ? 'score-under' : (p.displayScore === 0 ? 'score-even' : 'score-over');
-                    const scoreText = !tournamentStarted ? 'E' : (p.displayScore > 0 ? '+' + p.displayScore : (p.displayScore === 0 ? 'E' : p.displayScore));
-                    const rawText = !tournamentStarted ? 'E' : (p.rawScore > 0 ? '+' + p.rawScore : (p.rawScore === 0 ? 'E' : p.rawScore));
-
                     html += `
                         <tr class="border-b border-gray-50 last:border-0">
-                            <td class="py-2 font-medium ${p.missedCut ? 'line-through text-gray-300' : 'text-gray-700'}">
-                                ${p.name} ${p.appliedCutRule ? '<span class="cut-badge ml-1">Cap</span>' : ''}
-                            </td>
-                            <td class="text-right text-gray-400 text-xs">${rawText}</td>
-                            <td class="text-right ${scoreClass} text-base">${scoreText}</td>
+                            <td class="py-2 font-medium ${p.missedCut ? 'line-through text-gray-300' : 'text-gray-700'}">${p.name} ${p.appliedCutRule ? '<span class="cut-badge ml-1">Cap</span>' : ''}</td>
+                            <td class="text-right text-gray-400 text-xs">${p.rawScore > 0 ? '+' + p.rawScore : (p.rawScore === 0 ? 'E' : p.rawScore)}</td>
+                            <td class="text-right ${scoreClass} text-base">${p.displayScore > 0 ? '+' + p.displayScore : (p.displayScore === 0 ? 'E' : p.displayScore)}</td>
                         </tr>
                     `;
                 });
                 card.innerHTML = html + `</table></div>`;
                 container.appendChild(card);
             });
-
-            statusEl.innerText = tournamentStarted ? `Last Refreshed: ${new Date().toLocaleTimeString()}` : "Waiting for tournament to begin...";
+            statusEl.innerText = `Last Updated: ${new Date().toLocaleTimeString()}`;
         }
 
-        // Initial load
         updateDashboard();
-        // Refresh every 2 minutes
-        setInterval(updateDashboard, 120000);
+        setInterval(updateDashboard, 60000);
     </script>
 </body>
 </html>
