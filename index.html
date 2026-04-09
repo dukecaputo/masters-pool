@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Masters Live Pool Tracker 2026</title>
+    <title>Masters Live Pool 2026</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <link href="https://fonts.googleapis.com/css2?family=Playfair+Display:wght@700&family=Inter:wght@400;700;900&display=swap" rel="stylesheet">
     <style>
@@ -22,7 +22,8 @@
         .leaderboard-header { background-color: var(--masters-green); color: white; padding: 1rem; border-bottom: 3px solid var(--masters-yellow); }
         .rank-badge { background: rgba(255, 255, 255, 0.2); padding: 2px 8px; border-radius: 4px; font-size: 0.75rem; font-weight: 900; margin-right: 10px; border: 1px solid rgba(255, 255, 255, 0.3); }
         .cut-badge { background: var(--masters-yellow); color: var(--masters-green); font-weight: 900; padding: 2px 6px; border-radius: 4px; font-size: 0.65rem; text-transform: uppercase; }
-        .not-found-badge { background: #fee2e2; color: #b91c1c; font-size: 0.6rem; padding: 2px 5px; border-radius: 4px; font-weight: bold; border: 1px solid #fecaca; }
+        .loading-spinner { border: 3px solid rgba(255,255,255,0.3); border-top: 3px solid var(--masters-yellow); border-radius: 50%; width: 20px; height: 20px; animation: spin 1s linear infinite; }
+        @keyframes spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }
     </style>
 </head>
 <body class="min-h-screen p-4 md:p-8">
@@ -37,107 +38,88 @@
             </div>
             <h1 class="text-4xl md:text-6xl text-white drop-shadow-lg mb-2 uppercase tracking-tight">Masters Pool 2026</h1>
             <div id="cut-line-display" class="bg-yellow-400 text-green-900 px-6 py-1 rounded-full font-black inline-block shadow-lg uppercase tracking-widest text-sm">
-                Fetching Live Data...
+                Projected Cut: --
             </div>
-            <p id="last-updated" class="text-green-100 text-sm mt-4 italic">Syncing...</p>
+            <p id="last-updated" class="text-green-100 text-sm mt-4 italic">Initializing Live Scores...</p>
         </header>
 
-        <div id="teams-container" class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8 mb-20"></div>
-
-        <!-- DEBUGGER / FIELD CHECKER TOOL -->
-        <section class="bg-white/10 backdrop-blur-md rounded-lg p-6 border border-white/20">
-            <h3 class="text-white font-bold mb-4 flex items-center gap-2">
-                <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"></path></svg>
-                Troubleshooting: Official Field Checker
-            </h3>
-            <p class="text-green-100 text-xs mb-4">If a player shows "Not Found," check this list to see exactly how the API spells their name. If they aren't on this list, they aren't in the current API's tournament field.</p>
-            <div class="max-h-60 overflow-y-auto bg-black/20 p-4 rounded border border-white/10 grid grid-cols-2 md:grid-cols-4 gap-2 text-[10px] text-white" id="field-list">
-                Loading field...
-            </div>
-        </section>
+        <div id="teams-container" class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8 mb-10"></div>
+        
+        <div id="error-log" class="text-red-300 text-[10px] text-center opacity-50"></div>
     </div>
 
     <script>
         const SHEET_CSV_URL = 'https://docs.google.com/spreadsheets/d/e/2PACX-1vRNUYd3Yuvmvt0Uc9Ov54IguAwMgXPehvt7tjDBUonuQpKu1e6zmQNWDdGMCSWfU8zslFHi90T7AEzc/pub?gid=0&single=true&output=csv';
-        const API_URL = "https://champs-api.vercel.app/api/masters?cache=" + new Date().getTime(); 
+        
+        // Using a CORS Proxy to prevent the browser from blocking the data
+        const API_URL = "https://api.allorigins.win/get?url=" + encodeURIComponent("https://champs-api.vercel.app/api/masters?t=" + new Date().getTime());
 
         function getOrdinal(n) {
             let s = ["th", "st", "nd", "rd"], v = n % 100;
             return n + (s[(v - 20) % 10] || s[v] || s[0]);
         }
 
-        // Extremely lenient name cleaning
         function cleanName(name) {
             if (!name) return "";
-            return name.toLowerCase()
-                       .replace(/\./g, '') // Remove dots
-                       .replace(/,/g, '')  // Remove commas
-                       .replace(/\sjr/g, '') // Remove Jr
-                       .replace(/\siii/g, '') // Remove III
-                       .replace(/[^a-z0-9]/g, ''); // Remove everything else
+            return name.toLowerCase().replace(/[^a-z]/g, '');
         }
 
         async function updateDashboard() {
             const statusEl = document.getElementById('last-updated');
             const container = document.getElementById('teams-container');
-            const fieldListEl = document.getElementById('field-list');
+            const errorEl = document.getElementById('error-log');
+            
+            statusEl.innerHTML = '<div class="loading-spinner"></div> Refreshing Leaderboard...';
 
             try {
-                // 1. Fetch Leaderboard first to populate field checker
+                // 1. Fetch Teams
+                const sheetRes = await fetch(SHEET_CSV_URL);
+                const csvText = await sheetRes.text();
+                const rows = csvText.split(/\r?\n/).map(r => r.split(',')).filter(r => r.length > 1);
+                let poolTeams = (rows[0][0].toLowerCase().includes("team")) ? rows.slice(1) : rows;
+
+                // 2. Fetch Leaderboard via Proxy
                 const apiRes = await fetch(API_URL);
-                const data = await apiRes.json();
+                const proxyData = await apiRes.json();
+                const data = JSON.parse(proxyData.contents);
+                
                 const leaderboard = data.players || [];
                 const cutLine = parseInt(data.cut_line) || 0;
 
-                // Populate Field Checker
-                fieldListEl.innerHTML = leaderboard
-                    .sort((a, b) => a.name.localeCompare(b.name))
-                    .map(p => `<div>${p.name} (${p.score > 0 ? '+' + p.score : p.score})</div>`)
-                    .join('') || "No players found in API field.";
+                if (leaderboard.length === 0) throw new Error("API returned 0 players.");
 
                 document.getElementById('cut-line-display').innerText = `Projected Cut: ${cutLine > 0 ? '+' + cutLine : (cutLine === 0 ? 'E' : cutLine)}`;
 
-                // 2. Fetch Teams from Sheet
-                const sheetRes = await fetch(SHEET_CSV_URL);
-                const csvText = await sheetRes.text();
-                const rows = csvText.split(/\r?\n/).map(r => r.split(',')).filter(r => r.length > 1 && r[0] !== "");
-                let poolTeamsRaw = (rows[0][0].toLowerCase().includes("team")) ? rows.slice(1) : rows;
-
                 // 3. Match Logic
-                let processedTeams = poolTeamsRaw.map(row => {
+                let processedTeams = poolTeams.map(row => {
                     const owner = row[0].replace(/^"|"$/g, '').trim();
                     const golferNames = row.slice(1, 10).map(g => g.replace(/^"|"$/g, '').trim());
                     
                     let teamTotal = 0;
-                    let golferDetails = golferNames.map(sheetName => {
-                        const cleanedSheetName = cleanName(sheetName);
+                    let golferDetails = golferNames.map(name => {
+                        const player = leaderboard.find(p => cleanName(p.name).includes(cleanName(name)) || cleanName(name).includes(cleanName(p.name)));
                         
-                        // Try to find a match where either name contains the other
-                        const player = leaderboard.find(p => {
-                            const cleanedAPI = cleanName(p.name);
-                            return cleanedAPI.includes(cleanedSheetName) || cleanedSheetName.includes(cleanedAPI);
-                        });
-                        
-                        if (!player) {
-                            return { name: sheetName, rawScore: 0, displayScore: 0, missedCut: false, notFound: true };
-                        }
-
-                        let rawScore = parseInt(player.score) || 0;
+                        let rawScore = player ? parseInt(player.score) : 0;
                         let displayScore = rawScore;
                         let appliedCutRule = false;
+                        let missedCut = player ? player.missed_cut : false;
 
-                        if (!player.missed_cut && rawScore > cutLine) {
+                        // CUT RULE: weekend player worse than cut line
+                        if (player && !missedCut && rawScore > cutLine) {
                             displayScore = cutLine;
                             appliedCutRule = true;
                         }
                         
                         teamTotal += displayScore;
-                        return { name: player.name, rawScore, displayScore, appliedCutRule, missedCut: player.missed_cut, notFound: false };
+                        return { 
+                            name: player ? player.name : name + " (?)", 
+                            rawScore, displayScore, appliedCutRule, missedCut 
+                        };
                     });
                     return { owner, total: teamTotal, players: golferDetails };
                 });
 
-                // 4. Ranking
+                // 4. Sort and Rank
                 processedTeams.sort((a, b) => a.total - b.total);
                 let currentRank = 1;
                 processedTeams.forEach((team, i) => {
@@ -146,7 +128,7 @@
                     team.rankDisplay = (isTie ? "T" : "") + getOrdinal(currentRank);
                 });
 
-                // 5. Render Cards
+                // 5. Render
                 container.innerHTML = '';
                 processedTeams.forEach(team => {
                     const card = document.createElement('div');
@@ -164,19 +146,24 @@
                         html += `
                             <tr class="border-b border-gray-50 last:border-0">
                                 <td class="py-2 font-medium ${p.missedCut ? 'italic text-gray-700' : 'text-gray-700'}">
-                                    ${p.name} ${p.appliedCutRule ? '<span class="cut-badge ml-1">Cap</span>' : ''} ${p.notFound ? '<span class="not-found-badge ml-1">Not Found</span>' : ''}
+                                    ${p.name} ${p.appliedCutRule ? '<span class="cut-badge ml-1">Cap</span>' : ''}
                                 </td>
-                                <td class="text-right text-gray-400 text-xs">${p.notFound ? '--' : (p.rawScore > 0 ? '+' + p.rawScore : (p.rawScore === 0 ? 'E' : p.rawScore))}</td>
-                                <td class="text-right ${scoreClass} text-base">${p.notFound ? 'E' : (p.displayScore > 0 ? '+' + p.displayScore : (p.displayScore === 0 ? 'E' : p.displayScore))}</td>
+                                <td class="text-right text-gray-400 text-xs">${p.rawScore > 0 ? '+' + p.rawScore : (p.rawScore === 0 ? 'E' : p.rawScore)}</td>
+                                <td class="text-right ${scoreClass} text-base">${p.displayScore > 0 ? '+' + p.displayScore : (p.displayScore === 0 ? 'E' : p.displayScore)}</td>
                             </tr>
                         `;
                     });
                     card.innerHTML = html + `</table></div>`;
                     container.appendChild(card);
                 });
+
                 statusEl.innerText = `Last Refreshed: ${new Date().toLocaleTimeString()}`;
+                errorEl.innerText = ""; // Clear errors on success
+
             } catch (e) {
-                statusEl.innerText = "Connection lost. Retrying...";
+                console.error(e);
+                statusEl.innerText = "Data feed unavailable. Trying again...";
+                errorEl.innerText = "Debug info: " + e.message;
             }
         }
 
