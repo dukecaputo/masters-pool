@@ -40,7 +40,7 @@
             <div id="cut-line-display" class="bg-yellow-400 text-green-900 px-6 py-1 rounded-full font-black inline-block shadow-lg uppercase tracking-widest text-sm">
                 Fetching Scores...
             </div>
-            <p id="last-updated" class="text-green-100 text-sm mt-4 flex justify-center items-center gap-2 italic italic">Live Sync Active</p>
+            <p id="last-updated" class="text-green-100 text-sm mt-4 flex justify-center items-center gap-2 italic">Live Sync Active</p>
         </header>
 
         <div id="legend-bar" class="max-w-md mx-auto mb-10 bg-white/10 backdrop-blur-md p-3 rounded text-white text-xs flex justify-around border border-white/20">
@@ -63,7 +63,7 @@
 
         async function fetchTeams() {
             try {
-                const response = await fetch(SHEET_CSV_URL);
+                const response = await fetch(SHEET_CSV_URL, { cache: "no-store" });
                 const text = await response.text();
                 const rows = text.split(/\r?\n/).map(line => line.split(',').map(v => v.replace(/^"|"$/g, '').trim()));
                 return rows.filter(r => r.length > 1 && r[0] !== "" && !r[0].toLowerCase().includes("team"))
@@ -80,13 +80,18 @@
             if (poolTeams.length === 0) { statusEl.innerText = "Error: Google Sheet link failed."; return; }
 
             try {
-                const response = await fetch(API_URL);
+                // ADDED: cache buster to force fresh scores every 60 seconds
+                const response = await fetch(API_URL, { cache: "no-store" });
                 const data = await response.json();
                 
                 // Find Masters event or fallback to current event
                 const event = data.events.find(e => e.name.toLowerCase().includes("masters")) || data.events[0];
                 const competition = event.competitions[0];
                 const competitors = competition.competitors;
+
+                // Check if it's the weekend (Round 3 or 4) to know if the cut has happened
+                const currentRound = competition.status?.period || 1;
+                const isWeekend = currentRound >= 3;
 
                 // 1. Identify Cut Line
                 let cutLine = 0;
@@ -100,7 +105,9 @@
                     cutLine = (scoreStr === "E" || scoreStr === "EVEN") ? 0 : parseInt(scoreStr.replace('+', '')) || 0;
                 }
 
-                document.getElementById('cut-line-display').innerText = `Tournament: ${event.shortName} | Cut: ${cutLine > 0 ? '+' + cutLine : (cutLine === 0 ? 'E' : cutLine)}`;
+                // Update UI text based on round
+                const cutPrefix = currentRound < 3 ? "Proj. Cut" : "Cut";
+                document.getElementById('cut-line-display').innerText = `Tournament: ${event.shortName} | ${cutPrefix}: ${cutLine > 0 ? '+' + cutLine : (cutLine === 0 ? 'E' : cutLine)}`;
 
                 // 2. Map Scores
                 const teamResults = poolTeams.map(team => {
@@ -132,8 +139,10 @@
                         let poolScore = rawScore;
                         let appliedCap = false;
 
-                        // THE CUT RULE: Weekend players cannot have a score worse than the cut line
-                        if (!isCut && rawScore > cutLine) {
+                        // THE CUT RULE (UPDATED LOGIC): 
+                        // If it is the weekend, players who MADE the cut cannot score worse than the cut line.
+                        // Cut players keep their actual score.
+                        if (isWeekend && !isCut && rawScore > cutLine) {
                             poolScore = cutLine;
                             appliedCap = true;
                         }
