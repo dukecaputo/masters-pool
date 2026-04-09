@@ -38,14 +38,14 @@
             </div>
             <h1 class="text-4xl md:text-6xl text-white drop-shadow-lg mb-2 uppercase tracking-tight">Masters Pool 2026</h1>
             <div id="cut-line-display" class="bg-yellow-400 text-green-900 px-6 py-1 rounded-full font-black inline-block shadow-lg uppercase tracking-widest text-sm">
-                Fetching Tournament Data...
+                Fetching Scores...
             </div>
-            <p id="last-updated" class="text-green-100 text-sm mt-4 flex justify-center items-center gap-2 italic">Syncing scores...</p>
+            <p id="last-updated" class="text-green-100 text-sm mt-4 flex justify-center items-center gap-2 italic italic">Live Sync Active</p>
         </header>
 
         <div id="legend-bar" class="max-w-md mx-auto mb-10 bg-white/10 backdrop-blur-md p-3 rounded text-white text-xs flex justify-around border border-white/20">
             <span><strong class="text-yellow-400">•</strong> Under Par (Red)</span>
-            <span><strong class="text-blue-300">•</strong> Cut Cap Applied</span>
+            <span><strong class="text-blue-300">•</strong> Cut Cap</span>
             <span><strong class="italic text-white">•</strong> Missed Cut</span>
         </div>
 
@@ -54,8 +54,7 @@
 
     <script>
         const SHEET_CSV_URL = 'https://docs.google.com/spreadsheets/d/e/2PACX-1vRNUYd3Yuvmvt0Uc9Ov54IguAwMgXPehvt7tjDBUonuQpKu1e6zmQNWDdGMCSWfU8zslFHi90T7AEzc/pub?gid=0&single=true&output=csv';
-        // ESPN PGA Leaderboard API
-        const API_URL = "https://site.api.espn.com/apis/site/v2/sports/golf/leaderboard?league=pga";
+        const API_URL = "https://site.web.api.espn.com/apis/site/v2/sports/golf/leaderboard?league=pga";
 
         function getOrdinal(n) {
             let s = ["th", "st", "nd", "rd"], v = n % 100;
@@ -67,69 +66,85 @@
                 const response = await fetch(SHEET_CSV_URL);
                 const text = await response.text();
                 const rows = text.split(/\r?\n/).map(line => line.split(',').map(v => v.replace(/^"|"$/g, '').trim()));
-                const filtered = rows.filter(r => r.length > 1 && r[0] !== "" && !r[0].toLowerCase().includes("team"));
-                return filtered.map(r => ({ owner: r[0], golfers: r.slice(1, 10) }));
+                return rows.filter(r => r.length > 1 && r[0] !== "" && !r[0].toLowerCase().includes("team"))
+                           .map(r => ({ owner: r[0], golfers: r.slice(1, 10) }));
             } catch (e) { return []; }
         }
 
         async function updateScores() {
             const statusEl = document.getElementById('last-updated');
-            statusEl.innerHTML = '<div class="loading-spinner"></div> Refreshing Leaderboard...';
+            const container = document.getElementById('teams-container');
+            statusEl.innerHTML = '<div class="loading-spinner"></div> Updating Scores...';
 
             const poolTeams = await fetchTeams();
-            if (poolTeams.length === 0) { statusEl.innerText = "Error loading Google Sheet."; return; }
+            if (poolTeams.length === 0) { statusEl.innerText = "Error: Google Sheet link failed."; return; }
 
             try {
                 const response = await fetch(API_URL);
                 const data = await response.json();
                 
-                // Find the Masters in the event list (or default to the first PGA event)
+                // Find Masters event or fallback to current event
                 const event = data.events.find(e => e.name.toLowerCase().includes("masters")) || data.events[0];
-                const competitors = event.competitions[0].competitors;
-                
-                // Attempt to find cut line from status
+                const competition = event.competitions[0];
+                const competitors = competition.competitors;
+
+                // 1. Identify Cut Line
                 let cutLine = 0;
-                const statusNotes = event.competitions[0].notes || [];
-                const cutNote = statusNotes.find(n => n.type === "cutline");
+                const cutNote = (competition.notes || []).find(n => n.type.toLowerCase().includes("cut"));
                 if (cutNote) {
                     cutLine = parseInt(cutNote.text.replace(/[^0-9-]/g, '')) || 0;
                 } else {
-                    // Fallback: If no cut note, try to estimate by looking at the 50th player
-                    const p50 = competitors[49];
-                    if (p50) cutLine = parseInt(p50.score) || 0;
+                    // Fallback to 50th place player's score
+                    const p50 = competitors[49] || competitors[competitors.length - 1];
+                    const scoreStr = p50.score?.displayValue || p50.score || "0";
+                    cutLine = (scoreStr === "E" || scoreStr === "EVEN") ? 0 : parseInt(scoreStr.replace('+', '')) || 0;
                 }
 
                 document.getElementById('cut-line-display').innerText = `Tournament: ${event.shortName} | Cut: ${cutLine > 0 ? '+' + cutLine : (cutLine === 0 ? 'E' : cutLine)}`;
 
+                // 2. Map Scores
                 const teamResults = poolTeams.map(team => {
                     let teamTotal = 0;
-                    let playerDetails = team.golfers.map(name => {
-                        const p = competitors.find(c => c.athlete.displayName.toLowerCase().replace(/\s/g, '').includes(name.toLowerCase().replace(/\s/g, ''))) 
-                                  || { score: 0, athlete: { displayName: name }, status: { type: 'active' }, curScore: 0 };
-                        
-                        // ESPN provides score as "E", "-5", "+3" etc
-                        let rawScore = 0;
-                        if (p.score === "E") rawScore = 0;
-                        else if (typeof p.score === "string") rawScore = parseInt(p.score.replace('+', '')) || 0;
-                        else rawScore = parseInt(p.score) || 0;
+                    let pDetails = team.golfers.map(name => {
+                        // Match golfer name
+                        const p = competitors.find(c => 
+                            c.athlete.displayName.toLowerCase().replace(/\s/g, '')
+                            .includes(name.toLowerCase().replace(/\s/g, ''))
+                        );
 
-                        const missedCut = p.status?.type === 'cut' || p.status?.id === '3';
-                        let displayScore = rawScore;
+                        let rawScore = 0;
+                        let isCut = false;
+                        let displayName = name;
+
+                        if (p) {
+                            displayName = p.athlete.displayName;
+                            // Extract score from multiple possible ESPN fields
+                            const scoreObj = p.score?.displayValue || p.score || p.toPar || "0";
+                            const scoreStr = scoreObj.toString().toUpperCase();
+                            
+                            if (scoreStr === "E" || scoreStr === "EVEN" || scoreStr === "-") rawScore = 0;
+                            else rawScore = parseInt(scoreStr.replace('+', '')) || 0;
+
+                            // Check cut status (ESPN ID '3' is typically CUT)
+                            isCut = p.status?.id === "3" || p.status?.type?.name === "STATUS_CUT" || p.status?.type?.id === "3";
+                        }
+
+                        let poolScore = rawScore;
                         let appliedCap = false;
 
-                        // CAP RULE: If they made the cut but performed worse than the cut line
-                        if (!missedCut && rawScore > cutLine) {
-                            displayScore = cutLine;
+                        // THE CUT RULE: Weekend players cannot have a score worse than the cut line
+                        if (!isCut && rawScore > cutLine) {
+                            poolScore = cutLine;
                             appliedCap = true;
                         }
 
-                        teamTotal += displayScore;
-                        return { name: p.athlete.displayName, raw: rawScore, pool: displayScore, appliedCap, missedCut };
+                        teamTotal += poolScore;
+                        return { name: displayName, raw: rawScore, pool: poolScore, appliedCap, isCut };
                     });
-                    return { ...team, total: teamTotal, players: playerDetails };
+                    return { ...team, total: teamTotal, players: pDetails };
                 });
 
-                // Ranking Logic
+                // 3. Sorting & Ranking
                 teamResults.sort((a, b) => a.total - b.total);
                 let currentRank = 1;
                 teamResults.forEach((team, i) => {
@@ -138,11 +153,11 @@
                     team.rankDisplay = (isTie ? "T" : "") + getOrdinal(currentRank);
                 });
 
-                const container = document.getElementById('teams-container');
+                // 4. Render UI
                 container.innerHTML = '';
                 teamResults.forEach(team => {
                     const card = document.createElement('div');
-                    card.className = 'masters-card overflow-hidden mb-4';
+                    card.className = 'masters-card overflow-hidden';
                     let html = `
                         <div class="leaderboard-header flex justify-between items-center">
                             <div class="flex items-center"><span class="rank-badge">${team.rankDisplay}</span><h2 class="text-xl leading-tight">${team.owner}</h2></div>
@@ -155,7 +170,7 @@
                         const scoreClass = p.pool < 0 ? 'score-under' : (p.pool === 0 ? 'score-even' : 'score-over');
                         html += `
                             <tr class="border-b border-gray-50 last:border-0">
-                                <td class="py-2 font-medium ${p.missedCut ? 'italic text-gray-700' : 'text-gray-700'}">${p.name} ${p.appliedCap ? '<span class="cut-badge ml-1">Cap</span>' : ''}</td>
+                                <td class="py-2 font-medium ${p.isCut ? 'italic text-gray-700' : 'text-gray-700'}">${p.name} ${p.appliedCap ? '<span class="cut-badge ml-1">Cap</span>' : ''}</td>
                                 <td class="text-right text-gray-400 text-xs">${p.raw > 0 ? '+' + p.raw : (p.raw === 0 ? 'E' : p.raw)}</td>
                                 <td class="text-right ${scoreClass} text-base">${p.pool > 0 ? '+' + p.pool : (p.pool === 0 ? 'E' : p.pool)}</td>
                             </tr>
@@ -164,15 +179,16 @@
                     card.innerHTML = html + `</table></div>`;
                     container.appendChild(card);
                 });
+
                 statusEl.innerText = `Last Refreshed: ${new Date().toLocaleTimeString()}`;
             } catch (error) { 
+                statusEl.innerText = "Sync Error. Check tournament status."; 
                 console.error(error);
-                statusEl.innerText = "Error syncing with ESPN. Retrying..."; 
             }
         }
 
         updateScores();
-        setInterval(updateScores, 60000);
+        setInterval(updateScores, 60000); // Sync every minute
     </script>
 </body>
 </html>
