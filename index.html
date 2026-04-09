@@ -86,18 +86,18 @@
             <h1 class="text-4xl md:text-6xl text-white drop-shadow-lg mb-2 uppercase tracking-tight">Masters Pool 2026</h1>
             
             <div id="cut-line-display" class="bg-yellow-400 text-green-900 px-6 py-1 rounded-full font-black inline-block shadow-lg uppercase tracking-widest text-sm">
-                Tournament Starts Soon
+                Fetching Cut Line...
             </div>
             
             <p id="last-updated" class="text-green-100 text-sm mt-4 flex justify-center items-center gap-2 italic">
-                Ready for Tee Off...
+                Live Scoring Active
             </p>
         </header>
 
-        <!-- Legend (Only shows when live) -->
-        <div id="legend-bar" class="max-w-md mx-auto mb-10 bg-white/10 backdrop-blur-md p-3 rounded text-white text-xs flex justify-around border border-white/20 hidden">
+        <!-- Legend -->
+        <div id="legend-bar" class="max-w-md mx-auto mb-10 bg-white/10 backdrop-blur-md p-3 rounded text-white text-xs flex justify-around border border-white/20">
             <span><strong class="text-yellow-400">•</strong> Under Par (Red)</span>
-            <span><strong class="text-blue-300">•</strong> Cut Cap</span>
+            <span><strong class="text-blue-300">•</strong> Cut Cap Applied</span>
             <span><strong class="italic text-white">•</strong> Missed Cut</span>
         </div>
 
@@ -108,10 +108,8 @@
         const SHEET_CSV_URL = 'https://docs.google.com/spreadsheets/d/e/2PACX-1vRNUYd3Yuvmvt0Uc9Ov54IguAwMgXPehvt7tjDBUonuQpKu1e6zmQNWDdGMCSWfU8zslFHi90T7AEzc/pub?gid=0&single=true&output=csv';
         const API_URL = "https://champs-api.vercel.app/api/masters"; 
 
-        // Helper for rank suffixes (1st, 2nd, etc)
         function getOrdinal(n) {
-            let s = ["th", "st", "nd", "rd"],
-                v = n % 100;
+            let s = ["th", "st", "nd", "rd"], v = n % 100;
             return n + (s[(v - 20) % 10] || s[v] || s[0]);
         }
 
@@ -143,31 +141,27 @@
         async function updateDashboard() {
             const statusEl = document.getElementById('last-updated');
             const container = document.getElementById('teams-container');
-            const legendBar = document.getElementById('legend-bar');
             
-            statusEl.innerHTML = '<div class="loading-spinner"></div> Updating...';
+            statusEl.innerHTML = '<div class="loading-spinner"></div> Updating Scores...';
 
             const poolTeams = await fetchTeamsFromSheet();
             if (poolTeams.length === 0) {
-                statusEl.innerText = "Error loading teams.";
+                statusEl.innerText = "Error: Google Sheet data not found.";
                 return;
             }
 
             let leaderboard = [];
             let cutLine = 0;
-            let tournamentStarted = false;
 
             try {
                 const response = await fetch(API_URL);
                 const data = await response.json();
-                if (data.players && data.players.length > 0 && data.players[0].score !== null) {
-                    leaderboard = data.players;
-                    cutLine = parseInt(data.cut_line) || 0;
-                    tournamentStarted = true;
-                    document.getElementById('cut-line-display').innerText = `Projected Cut: ${cutLine > 0 ? '+' + cutLine : (cutLine === 0 ? 'E' : cutLine)}`;
-                    legendBar.classList.remove('hidden');
-                }
-            } catch (error) { console.log("API not live."); }
+                leaderboard = data.players || [];
+                cutLine = parseInt(data.cut_line) || 0;
+                document.getElementById('cut-line-display').innerText = `Projected Cut: ${cutLine > 0 ? '+' + cutLine : (cutLine === 0 ? 'E' : cutLine)}`;
+            } catch (error) {
+                console.log("Could not fetch API scores. Displaying names only.");
+            }
 
             const teamResults = poolTeams.map(team => {
                 let teamTotal = 0;
@@ -180,7 +174,8 @@
                     let displayScore = rawScore;
                     let appliedCutRule = false;
 
-                    if (tournamentStarted && !player.missed_cut && rawScore > cutLine) {
+                    // THE CUT RULE: If player is NOT cut (weekend player) but score is worse than the cut line
+                    if (!player.missed_cut && rawScore > cutLine) {
                         displayScore = cutLine;
                         appliedCutRule = true;
                     }
@@ -191,24 +186,17 @@
                 return { ...team, total: teamTotal, players: golferDetails };
             });
 
-            // Sorting and Rank Calculation
-            if (tournamentStarted) {
-                teamResults.sort((a, b) => a.total - b.total);
-                
-                let currentRank = 1;
-                teamResults.forEach((team, index) => {
-                    // If score is different from previous, update the rank to current index + 1
-                    if (index > 0 && team.total > teamResults[index - 1].total) {
-                        currentRank = index + 1;
-                    }
-                    
-                    // Check for ties
-                    const isTie = (index > 0 && team.total === teamResults[index - 1].total) || 
-                                  (index < teamResults.length - 1 && team.total === teamResults[index + 1].total);
-                    
-                    team.rankDisplay = (isTie ? "T" : "") + getOrdinal(currentRank);
-                });
-            }
+            // Sort and Rank
+            teamResults.sort((a, b) => a.total - b.total);
+            let currentRank = 1;
+            teamResults.forEach((team, index) => {
+                if (index > 0 && team.total > teamResults[index - 1].total) {
+                    currentRank = index + 1;
+                }
+                const isTie = (index > 0 && team.total === teamResults[index - 1].total) || 
+                              (index < teamResults.length - 1 && team.total === teamResults[index + 1].total);
+                team.rankDisplay = (isTie ? "T" : "") + getOrdinal(currentRank);
+            });
 
             container.innerHTML = '';
             teamResults.forEach((team) => {
@@ -218,55 +206,44 @@
                 let html = `
                     <div class="leaderboard-header flex justify-between items-center">
                         <div class="flex items-center">
-                            ${tournamentStarted ? `<span class="rank-badge">${team.rankDisplay}</span>` : ''}
+                            <span class="rank-badge">${team.rankDisplay}</span>
                             <h2 class="text-xl leading-tight">${team.owner}</h2>
                         </div>
                         <div class="text-right">
-                            <span class="text-3xl font-black ${tournamentStarted && team.total < 0 ? 'text-red-400' : 'text-white'}">
-                                ${!tournamentStarted ? 'LOCKED' : (team.total > 0 ? '+' + team.total : (team.total === 0 ? 'E' : team.total))}
+                            <span class="text-3xl font-black ${team.total < 0 ? 'text-red-400' : 'text-white'}">
+                                ${team.total > 0 ? '+' + team.total : (team.total === 0 ? 'E' : team.total)}
                             </span>
                         </div>
                     </div>
                     <div class="p-4 bg-white">
-                `;
-
-                if (!tournamentStarted) {
-                    html += `
-                        <div class="py-10 text-center text-green-800 opacity-20">
-                            <svg class="w-12 h-12 mx-auto" fill="currentColor" viewBox="0 0 20 20"><path fill-rule="evenodd" d="M5 9V7a5 5 0 0110 0v2a2 2 0 012 2v5a2 2 0 01-2 2H5a2 2 0 01-2-2v-5a2 2 0 012-2zm8-2v2H7V7a3 3 0 016 0z" clip-rule="evenodd"></path></svg>
-                            <p class="text-xs font-bold uppercase mt-2 tracking-widest">Locked</p>
-                        </div>`;
-                } else {
-                    html += `
                         <table class="w-full text-sm">
                             <tr class="text-left text-gray-400 border-b text-[10px] uppercase font-bold tracking-widest">
-                                <th class="pb-2">Golfer</th><th class="pb-2 text-right">Live</th><th class="pb-2 text-right">Pool</th>
+                                <th class="pb-2">Golfer</th><th class="pb-2 text-right">Actual</th><th class="pb-2 text-right">Pool</th>
                             </tr>
-                    `;
-                    team.players.forEach(p => {
-                        const scoreClass = p.displayScore < 0 ? 'score-under' : (p.displayScore === 0 ? 'score-even' : 'score-over');
-                        html += `
-                            <tr class="border-b border-gray-50 last:border-0">
-                                <td class="py-2 font-medium ${p.missedCut ? 'italic text-gray-700' : 'text-gray-700'}">
-                                    ${p.name} ${p.appliedCutRule ? '<span class="cut-badge ml-1">Cap</span>' : ''}
-                                </td>
-                                <td class="text-right text-gray-400 text-xs">${p.rawScore > 0 ? '+' + p.rawScore : (p.rawScore === 0 ? 'E' : p.rawScore)}</td>
-                                <td class="text-right ${scoreClass} text-base">${p.displayScore > 0 ? '+' + p.displayScore : (p.displayScore === 0 ? 'E' : p.displayScore)}</td>
-                            </tr>
-                        `;
-                    });
-                    html += `</table>`;
-                }
+                `;
 
-                card.innerHTML = html + `</div>`;
+                team.players.forEach(p => {
+                    const scoreClass = p.displayScore < 0 ? 'score-under' : (p.displayScore === 0 ? 'score-even' : 'score-over');
+                    html += `
+                        <tr class="border-b border-gray-50 last:border-0">
+                            <td class="py-2 font-medium ${p.missedCut ? 'italic text-gray-700' : 'text-gray-700'}">
+                                ${p.name} ${p.appliedCutRule ? '<span class="cut-badge ml-1">Cap</span>' : ''}
+                            </td>
+                            <td class="text-right text-gray-400 text-xs">${p.rawScore > 0 ? '+' + p.rawScore : (p.rawScore === 0 ? 'E' : p.rawScore)}</td>
+                            <td class="text-right ${scoreClass} text-base">${p.displayScore > 0 ? '+' + p.displayScore : (p.displayScore === 0 ? 'E' : p.displayScore)}</td>
+                        </tr>
+                    `;
+                });
+                
+                card.innerHTML = html + `</table></div>`;
                 container.appendChild(card);
             });
 
-            statusEl.innerText = tournamentStarted ? `Last Updated: ${new Date().toLocaleTimeString()}` : "Ready for the 2026 Masters Tournament";
+            statusEl.innerText = `Last Refreshed: ${new Date().toLocaleTimeString()}`;
         }
 
         updateDashboard();
-        setInterval(updateDashboard, 120000);
+        setInterval(updateDashboard, 60000); // 1-minute refresh for live play
     </script>
 </body>
 </html>
