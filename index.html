@@ -80,80 +80,87 @@
             if (poolTeams.length === 0) { statusEl.innerText = "Error: Google Sheet link failed."; return; }
 
             try {
-                // ADDED: cache buster to force fresh scores every 60 seconds
                 const response = await fetch(API_URL, { cache: "no-store" });
                 const data = await response.json();
                 
-                // Find Masters event or fallback to current event
                 const event = data.events.find(e => e.name.toLowerCase().includes("masters")) || data.events[0];
                 const competition = event.competitions[0];
                 const competitors = competition.competitors;
 
-                // Check if it's the weekend (Round 3 or 4) to know if the cut has happened
                 const currentRound = competition.status?.period || 1;
                 const isWeekend = currentRound >= 3;
 
-                // 1. Identify Cut Line
                 let cutLine = 0;
                 const cutNote = (competition.notes || []).find(n => n.type.toLowerCase().includes("cut"));
                 if (cutNote) {
                     cutLine = parseInt(cutNote.text.replace(/[^0-9-]/g, '')) || 0;
                 } else {
-                    // Fallback to 50th place player's score
                     const p50 = competitors[49] || competitors[competitors.length - 1];
                     const scoreStr = p50.score?.displayValue || p50.score || "0";
                     cutLine = (scoreStr === "E" || scoreStr === "EVEN") ? 0 : parseInt(scoreStr.replace('+', '')) || 0;
                 }
 
-                // Update UI text based on round
                 const cutPrefix = currentRound < 3 ? "Proj. Cut" : "Cut";
                 document.getElementById('cut-line-display').innerText = `Tournament: ${event.shortName} | ${cutPrefix}: ${cutLine > 0 ? '+' + cutLine : (cutLine === 0 ? 'E' : cutLine)}`;
 
-                // 2. Map Scores
                 const teamResults = poolTeams.map(team => {
                     let teamTotal = 0;
                     let pDetails = team.golfers.map(name => {
-                        // Match golfer name
-                        const p = competitors.find(c => 
-                            c.athlete.displayName.toLowerCase().replace(/\s/g, '')
-                            .includes(name.toLowerCase().replace(/\s/g, ''))
-                        );
+                        
+                        // Robust Name Matcher (Strips everything but letters to catch punctuation differences)
+                        const sheetName = name.toLowerCase().replace(/[^a-z]/g, '');
+                        const p = competitors.find(c => {
+                            const apiName = c.athlete.displayName.toLowerCase().replace(/[^a-z]/g, '');
+                            return apiName === sheetName || apiName.includes(sheetName) || sheetName.includes(apiName);
+                        });
 
                         let rawScore = 0;
                         let isCut = false;
                         let displayName = name;
+                        let isNotFound = false; // New flag to catch spelling errors
 
                         if (p) {
                             displayName = p.athlete.displayName;
-                            // Extract score from multiple possible ESPN fields
-                            const scoreObj = p.score?.displayValue || p.score || p.toPar || "0";
-                            const scoreStr = scoreObj.toString().toUpperCase();
                             
-                            if (scoreStr === "E" || scoreStr === "EVEN" || scoreStr === "-") rawScore = 0;
+                            // Deep-search ESPN API for the true score
+                            let scoreVal = "0";
+                            if (p.score?.displayValue !== undefined) {
+                                scoreVal = p.score.displayValue;
+                            } else if (p.score !== undefined && p.score !== null && typeof p.score !== 'object') {
+                                scoreVal = p.score;
+                            } else if (p.toPar !== undefined) {
+                                scoreVal = p.toPar;
+                            } else if (p.statistics) {
+                                const stat = p.statistics.find(s => s.name === "score" || s.name === "toPar");
+                                if (stat) scoreVal = stat.displayValue || stat.value || "0";
+                            }
+
+                            const scoreStr = scoreVal.toString().toUpperCase();
+                            if (scoreStr === "E" || scoreStr === "EVEN" || scoreStr === "-" || scoreStr === "") rawScore = 0;
                             else rawScore = parseInt(scoreStr.replace('+', '')) || 0;
 
-                            // Check cut status (ESPN ID '3' is typically CUT)
                             isCut = p.status?.id === "3" || p.status?.type?.name === "STATUS_CUT" || p.status?.type?.id === "3";
+                        } else {
+                            // Player doesn't exist in the ESPN feed for this tournament
+                            isNotFound = true;
+                            rawScore = 0; 
                         }
 
                         let poolScore = rawScore;
                         let appliedCap = false;
 
-                        // THE CUT RULE (UPDATED LOGIC): 
-                        // If it is the weekend, players who MADE the cut cannot score worse than the cut line.
-                        // Cut players keep their actual score.
-                        if (isWeekend && !isCut && rawScore > cutLine) {
+                        // Weekend cap logic
+                        if (isWeekend && !isCut && !isNotFound && rawScore > cutLine) {
                             poolScore = cutLine;
                             appliedCap = true;
                         }
 
                         teamTotal += poolScore;
-                        return { name: displayName, raw: rawScore, pool: poolScore, appliedCap, isCut };
+                        return { name: displayName, raw: rawScore, pool: poolScore, appliedCap, isCut, isNotFound };
                     });
                     return { ...team, total: teamTotal, players: pDetails };
                 });
 
-                // 3. Sorting & Ranking
                 teamResults.sort((a, b) => a.total - b.total);
                 let currentRank = 1;
                 teamResults.forEach((team, i) => {
@@ -162,7 +169,6 @@
                     team.rankDisplay = (isTie ? "T" : "") + getOrdinal(currentRank);
                 });
 
-                // 4. Render UI
                 container.innerHTML = '';
                 teamResults.forEach(team => {
                     const card = document.createElement('div');
@@ -179,7 +185,11 @@
                         const scoreClass = p.pool < 0 ? 'score-under' : (p.pool === 0 ? 'score-even' : 'score-over');
                         html += `
                             <tr class="border-b border-gray-50 last:border-0">
-                                <td class="py-2 font-medium ${p.isCut ? 'italic text-gray-700' : 'text-gray-700'}">${p.name} ${p.appliedCap ? '<span class="cut-badge ml-1">Cap</span>' : ''}</td>
+                                <td class="py-2 font-medium ${p.isCut ? 'italic text-gray-700' : 'text-gray-700'}">
+                                    ${p.name} 
+                                    ${p.isNotFound ? '<span class="text-red-500 text-[10px] ml-1 font-bold">NOT FOUND</span>' : ''}
+                                    ${p.appliedCap ? '<span class="cut-badge ml-1">Cap</span>' : ''}
+                                </td>
                                 <td class="text-right text-gray-400 text-xs">${p.raw > 0 ? '+' + p.raw : (p.raw === 0 ? 'E' : p.raw)}</td>
                                 <td class="text-right ${scoreClass} text-base">${p.pool > 0 ? '+' + p.pool : (p.pool === 0 ? 'E' : p.pool)}</td>
                             </tr>
@@ -197,7 +207,7 @@
         }
 
         updateScores();
-        setInterval(updateScores, 60000); // Sync every minute
+        setInterval(updateScores, 60000); 
     </script>
 </body>
 </html>
