@@ -1,3 +1,58 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Masters Live Pool Tracker 2026</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Playfair+Display:wght@700&family=Inter:wght@400;700;900&display=swap" rel="stylesheet">
+    <style>
+        :root { --masters-green: #006747; --masters-yellow: #ffcc00; }
+        body {
+            font-family: 'Inter', sans-serif;
+            background: linear-gradient(rgba(0, 103, 71, 0.9), rgba(0, 103, 71, 0.9)), 
+                        url('https://images.unsplash.com/photo-1587174486073-ae5e5cff23aa?ixlib=rb-4.0.3&auto=format&fit=crop&w=2000&q=80');
+            background-size: cover; background-attachment: fixed; background-position: center;
+        }
+        h1, h2 { font-family: 'Playfair Display', serif; }
+        .score-under { color: #d91e18; font-weight: 800; }
+        .score-even { color: #27ae60; font-weight: 800; }
+        .score-over { color: #2c3e50; font-weight: 800; }
+        .masters-card { background: rgba(255, 255, 255, 0.95); border-radius: 2px; border-top: 6px solid var(--masters-yellow); box-shadow: 0 10px 25px rgba(0,0,0,0.3); }
+        .leaderboard-header { background-color: var(--masters-green); color: white; padding: 1rem; border-bottom: 3px solid var(--masters-yellow); }
+        .rank-badge { background: rgba(255, 255, 255, 0.2); padding: 2px 8px; border-radius: 4px; font-size: 0.75rem; font-weight: 900; margin-right: 10px; border: 1px solid rgba(255, 255, 255, 0.3); }
+        .cut-badge { background: var(--masters-yellow); color: var(--masters-green); font-weight: 900; padding: 2px 8px; border-radius: 4px; font-size: 0.7rem; text-transform: uppercase; }
+        .loading-spinner { border: 3px solid rgba(255,255,255,0.3); border-top: 3px solid var(--masters-yellow); border-radius: 50%; width: 20px; height: 20px; animation: spin 1s linear infinite; }
+        @keyframes spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }
+    </style>
+</head>
+<body class="min-h-screen p-4 md:p-8">
+
+    <div class="max-w-6xl mx-auto">
+        <header class="text-center mb-10">
+            <div class="flex justify-center mb-6">
+                <div class="bg-white p-2 rounded-lg shadow-2xl">
+                    <img src="https://i0.wp.com/huskybulletin.com/wp-content/uploads/2025/04/masters-emblem.png?fit=1200%2C675&ssl=1" 
+                         alt="Masters Logo" class="h-24 md:h-32 w-auto object-contain">
+                </div>
+            </div>
+            <h1 class="text-4xl md:text-6xl text-white drop-shadow-lg mb-2 uppercase tracking-tight">Masters Pool 2026</h1>
+            <div id="cut-line-display" class="bg-yellow-400 text-green-900 px-6 py-1 rounded-full font-black inline-block shadow-lg uppercase tracking-widest text-sm">
+                Fetching Scores...
+            </div>
+            <p id="last-updated" class="text-green-100 text-sm mt-4 flex justify-center items-center gap-2 italic">Live Sync Active</p>
+        </header>
+
+        <div id="legend-bar" class="max-w-md mx-auto mb-10 bg-white/10 backdrop-blur-md p-3 rounded text-white text-xs flex justify-around border border-white/20">
+            <span><strong class="text-yellow-400">•</strong> Under Par (Red)</span>
+            <span><strong class="text-blue-300">•</strong> Cut Cap</span>
+            <span><strong class="italic text-white">•</strong> Missed Cut</span>
+        </div>
+
+        <div id="teams-container" class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8"></div>
+    </div>
+
+    <script>
 const SHEET_CSV_URL = 'https://docs.google.com/spreadsheets/d/e/2PACX-1vRNUYd3Yuvmvt0Uc9Ov54IguAwMgXPehvt7tjDBUonuQpKu1e6zmQNWDdGMCSWfU8zslFHi90T7AEzc/pub?gid=0&single=true&output=csv';
 const API_URL = "https://site.web.api.espn.com/apis/site/v2/sports/golf/leaderboard?league=pga";
 
@@ -156,3 +211,6 @@ async function updateScores() {
 
 updateScores();
 setInterval(updateScores, 60000);
+    </script>
+</body>
+</html>
