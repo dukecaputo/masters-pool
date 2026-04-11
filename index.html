@@ -10,278 +10,372 @@
         :root { --masters-green: #006747; --masters-yellow: #ffcc00; }
         body {
             font-family: 'Inter', sans-serif;
-            background: linear-gradient(rgba(0, 103, 71, 0.9), rgba(0, 103, 71, 0.9)), 
+            background: linear-gradient(rgba(0, 103, 71, 0.9), rgba(0, 103, 71, 0.9)),
                         url('https://images.unsplash.com/photo-1587174486073-ae5e5cff23aa?ixlib=rb-4.0.3&auto=format&fit=crop&w=2000&q=80');
             background-size: cover; background-attachment: fixed; background-position: center;
         }
         h1, h2 { font-family: 'Playfair Display', serif; }
-        .score-under { color: #d91e18; font-weight: 800; }
-        .score-even { color: #27ae60; font-weight: 800; }
-        .score-over { color: #2c3e50; font-weight: 800; }
-        .masters-card { background: rgba(255, 255, 255, 0.95); border-radius: 2px; border-top: 6px solid var(--masters-yellow); box-shadow: 0 10px 25px rgba(0,0,0,0.3); }
+        .score-under  { color: #d91e18; font-weight: 800; }
+        .score-even   { color: #27ae60; font-weight: 800; }
+        .score-over   { color: #2c3e50; font-weight: 800; }
+        .masters-card { background: rgba(255,255,255,0.95); border-radius: 2px; border-top: 6px solid var(--masters-yellow); box-shadow: 0 10px 25px rgba(0,0,0,0.3); }
         .leaderboard-header { background-color: var(--masters-green); color: white; padding: 1rem; border-bottom: 3px solid var(--masters-yellow); }
-        .rank-badge { background: rgba(255, 255, 255, 0.2); padding: 2px 8px; border-radius: 4px; font-size: 0.75rem; font-weight: 900; margin-right: 10px; border: 1px solid rgba(255, 255, 255, 0.3); }
-        .cut-badge { background: var(--masters-yellow); color: var(--masters-green); font-weight: 900; padding: 2px 8px; border-radius: 4px; font-size: 0.7rem; text-transform: uppercase; }
-        .loading-spinner { border: 3px solid rgba(255,255,255,0.3); border-top: 3px solid var(--masters-yellow); border-radius: 50%; width: 20px; height: 20px; animation: spin 1s linear infinite; }
-        @keyframes spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }
+        .rank-badge { background: rgba(255,255,255,0.2); padding: 2px 8px; border-radius: 4px; font-size: 0.75rem; font-weight: 900; margin-right: 10px; border: 1px solid rgba(255,255,255,0.3); }
+        .cap-badge  { background: var(--masters-yellow); color: var(--masters-green); font-weight: 900; padding: 2px 8px; border-radius: 4px; font-size: 0.7rem; text-transform: uppercase; }
+        .wd-badge   { background: #ccc; color: #333; font-weight: 900; padding: 2px 8px; border-radius: 4px; font-size: 0.7rem; text-transform: uppercase; }
+        .loading-spinner { border: 3px solid rgba(255,255,255,0.3); border-top: 3px solid var(--masters-yellow); border-radius: 50%; width: 20px; height: 20px; animation: spin 1s linear infinite; display: inline-block; }
+        @keyframes spin { to { transform: rotate(360deg); } }
     </style>
 </head>
 <body class="min-h-screen p-4 md:p-8">
+<div class="max-w-6xl mx-auto">
 
-    <div class="max-w-6xl mx-auto">
-        <header class="text-center mb-10">
-            <div class="flex justify-center mb-6">
-                <div class="bg-white p-2 rounded-lg shadow-2xl">
-                    <img src="https://i0.wp.com/huskybulletin.com/wp-content/uploads/2025/04/masters-emblem.png?fit=1200%2C675&ssl=1" 
-                         alt="Masters Logo" class="h-24 md:h-32 w-auto object-contain">
-                </div>
+    <header class="text-center mb-10">
+        <div class="flex justify-center mb-6">
+            <div class="bg-white p-2 rounded-lg shadow-2xl">
+                <img src="https://i0.wp.com/huskybulletin.com/wp-content/uploads/2025/04/masters-emblem.png?fit=1200%2C675&ssl=1"
+                     alt="Masters Logo" class="h-24 md:h-32 w-auto object-contain">
             </div>
-            <h1 class="text-4xl md:text-6xl text-white drop-shadow-lg mb-2 uppercase tracking-tight">Masters Pool 2026</h1>
-            <div id="cut-line-display" class="bg-yellow-400 text-green-900 px-6 py-1 rounded-full font-black inline-block shadow-lg uppercase tracking-widest text-sm">
-                Fetching Scores...
-            </div>
-            <p id="last-updated" class="text-green-100 text-sm mt-4 flex justify-center items-center gap-2 italic">Live Sync Active</p>
-        </header>
-
-        <div id="legend-bar" class="max-w-md mx-auto mb-10 bg-white/10 backdrop-blur-md p-3 rounded text-white text-xs flex justify-around border border-white/20">
-            <span><strong class="text-yellow-400">•</strong> Under Par (Red)</span>
-            <span><strong class="text-blue-300">•</strong> Cut Cap</span>
-            <span><strong class="italic text-white">•</strong> Missed Cut</span>
         </div>
+        <h1 class="text-4xl md:text-6xl text-white drop-shadow-lg mb-2 uppercase tracking-tight">Masters Pool 2026</h1>
+        <div id="cut-line-display" class="bg-yellow-400 text-green-900 px-6 py-1 rounded-full font-black inline-block shadow-lg uppercase tracking-widest text-sm">
+            Fetching Scores...
+        </div>
+        <p id="last-updated" class="text-green-100 text-sm mt-4 flex justify-center items-center gap-2 italic">Live Sync Active</p>
+    </header>
 
-        <div id="teams-container" class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8"></div>
+    <div class="max-w-md mx-auto mb-10 bg-white/10 backdrop-blur-md p-3 rounded text-white text-xs flex justify-around border border-white/20">
+        <span><strong class="text-red-400">•</strong> Under Par</span>
+        <span><span class="cap-badge">CAP</span> Made-cut player capped at cut line</span>
+        <span><em>Italic</em> = Missed Cut</span>
     </div>
 
-    <script>
-        const SHEET_CSV_URL = 'https://docs.google.com/spreadsheets/d/e/2PACX-1vRNUYd3Yuvmvt0Uc9Ov54IguAwMgXPehvt7tjDBUonuQpKu1e6zmQNWDdGMCSWfU8zslFHi90T7AEzc/pub?gid=0&single=true&output=csv';
-        const API_URL = "https://site.web.api.espn.com/apis/site/v2/sports/golf/leaderboard?league=pga&tournamentId=401811941";
+    <div id="teams-container" class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8"></div>
+</div>
 
-        function getOrdinal(n) {
-            let s = ["th", "st", "nd", "rd"], v = n % 100;
-            return n + (s[(v - 20) % 10] || s[v] || s[0]);
-        }
+<script>
+// ─── CONFIG ──────────────────────────────────────────────────────────────────
+const SHEET_CSV_URL = 'https://docs.google.com/spreadsheets/d/e/2PACX-1vRNUYd3Yuvmvt0Uc9Ov54IguAwMgXPehvt7tjDBUonuQpKu1e6zmQNWDdGMCSWfU8zslFHi90T7AEzc/pub?gid=0&single=true&output=csv';
+const API_URL       = 'https://site.web.api.espn.com/apis/site/v2/sports/golf/leaderboard?league=pga&tournamentId=401811941';
 
-        function fmtScore(n) {
-            if (n === 0) return 'E';
-            return n > 0 ? '+' + n : String(n);
-        }
+// ─── HELPERS ─────────────────────────────────────────────────────────────────
+function fmtScore(n) {
+    if (n === 0) return 'E';
+    return n > 0 ? '+' + n : String(n);
+}
 
-        function parseScore(val) {
-            if (val === null || val === undefined) return 0;
-            const s = val.toString().trim().toUpperCase();
-            if (s === "E" || s === "EVEN" || s === "-" || s === "") return 0;
-            const n = parseInt(s.replace('+', ''), 10);
-            return isNaN(n) ? 0 : n;
-        }
+function getOrdinal(n) {
+    const s = ['th','st','nd','rd'], v = n % 100;
+    return n + (s[(v - 20) % 10] || s[v] || s[0]);
+}
 
-        function extractToPar(competitor) {
-            // Primary: statistics array (most reliable during live play)
-            if (Array.isArray(competitor.statistics)) {
-                const stat = competitor.statistics.find(s =>
-                    s.name === "toPar" || s.abbreviation === "TO PAR" || s.name === "scoreToPar"
-                );
-                if (stat && stat.displayValue !== undefined) return parseScore(stat.displayValue);
-            }
-            // Secondary: linescores
-            if (Array.isArray(competitor.linescores) && competitor.linescores.length > 0) {
-                const last = competitor.linescores[competitor.linescores.length - 1];
-                if (last.value !== undefined && last.value !== null && Math.abs(last.value) <= 30) {
-                    return last.value;
-                }
-            }
-            // Tertiary: top-level score field
-            if (competitor.score !== undefined && competitor.score !== null) {
-                const sv = competitor.score?.displayValue ?? competitor.score;
-                return parseScore(sv);
-            }
-            return 0;
-        }
+// Parse any ESPN score string into a signed integer (to-par).
+function parseScore(val) {
+    if (val === null || val === undefined) return null;
+    const s = val.toString().trim().toUpperCase();
+    if (s === '' || s === '-' || s === 'E' || s === 'EVEN') return 0;
+    const n = parseInt(s.replace('+', ''), 10);
+    return isNaN(n) ? null : n;
+}
 
-        function matchGolfer(name, competitors) {
-            const nameCleaned = name.toLowerCase().replace(/\s/g, '');
-            const sheetLastName = name.trim().split(/\s+/).pop().toLowerCase();
-
-            return competitors.find(c => {
-                const displayCleaned = (c.athlete?.displayName || '').toLowerCase().replace(/\s/g, '');
-                const lastName = (c.athlete?.lastName || '').toLowerCase().trim();
-
-                // 1. Exact full display name match
-                if (displayCleaned === nameCleaned) return true;
-                // 2. Display name contains full search string (only for longer names to avoid false positives)
-                if (nameCleaned.length > 5 && displayCleaned.includes(nameCleaned)) return true;
-                // 3. Exact last name match (must be longer than 3 chars to avoid e.g. "Kim" collisions)
-                if (sheetLastName.length > 3 && sheetLastName === lastName) return true;
-
-                return false;
-            });
-        }
-
-        async function fetchTeams() {
-            try {
-                const response = await fetch(SHEET_CSV_URL);
-                const text = await response.text();
-                const rows = text.split(/\r?\n/).map(line =>
-                    line.split(',').map(v => v.replace(/^"|"$/g, '').trim())
-                );
-                return rows
-                    .filter(r => r.length > 1 && r[0] !== "" && !r[0].toLowerCase().includes("team"))
-                    .map(r => ({ owner: r[0], golfers: r.slice(1, 10).filter(Boolean) }));
-            } catch (e) {
-                console.error("Sheet fetch error:", e);
-                return [];
+// Extract the to-par score from an ESPN competitor object.
+// Tries multiple locations in order of reliability.
+function extractToPar(c) {
+    // 1. statistics array — most reliable during live rounds
+    if (Array.isArray(c.statistics)) {
+        for (const s of c.statistics) {
+            if (s.name === 'toPar' || s.name === 'scoreToPar' || s.abbreviation === 'TO PAR') {
+                const v = parseScore(s.displayValue);
+                if (v !== null) return v;
             }
         }
+    }
+    // 2. linescores — cumulative value on the last entry
+    if (Array.isArray(c.linescores) && c.linescores.length > 0) {
+        const last = c.linescores[c.linescores.length - 1];
+        // linescores.value can be raw strokes on some endpoints — skip if implausibly large
+        if (typeof last.value === 'number' && Math.abs(last.value) <= 30) return last.value;
+    }
+    // 3. top-level score field
+    const raw = c.score?.displayValue ?? c.score ?? null;
+    const v = parseScore(raw);
+    if (v !== null) return v;
 
-        async function updateScores() {
-            const statusEl = document.getElementById('last-updated');
-            const container = document.getElementById('teams-container');
-            statusEl.innerHTML = '<div class="loading-spinner inline-block mr-2"></div> Updating Scores...';
+    return 0; // default: even par (pre-tournament / no data)
+}
 
-            const poolTeams = await fetchTeams();
-            if (poolTeams.length === 0) {
-                statusEl.innerText = "Error: Google Sheet link failed.";
-                return;
-            }
+// Determine whether a competitor has missed the cut.
+function isMissedCut(c) {
+    const id   = c.status?.id;
+    const name = (c.status?.type?.name || '').toUpperCase();
+    return id === '3' || name === 'STATUS_CUT' || name === 'STATUS_MISSED_CUT';
+}
 
-            try {
-                const response = await fetch(API_URL);
-                if (!response.ok) throw new Error(`ESPN API returned ${response.status}`);
-                const data = await response.json();
+function isWithdrawn(c) {
+    const id   = c.status?.id;
+    const name = (c.status?.type?.name || '').toUpperCase();
+    return id === '4' || name === 'STATUS_WITHDRAWN' || name === 'STATUS_WD' || name === 'STATUS_DQ';
+}
 
-                if (!data.events || data.events.length === 0) {
-                    throw new Error("No events returned from ESPN API.");
-                }
+// ─── CUT LINE ────────────────────────────────────────────────────────────────
+// Strategy (in order of preference):
+//   A. If ESPN's competition object carries a cutLine field, use it directly.
+//   B. Find the worst score among players whose status is explicitly "made cut"
+//      (i.e. NOT missed-cut and NOT withdrawn). That worst score IS the cut line.
+//   C. If fewer than 50 players remain (pre-cut), return null so the UI can
+//      display "Cut TBD" rather than a bogus number.
+function deriveCutLine(competition, competitors) {
 
-                const event = data.events.find(e => e.name.toLowerCase().includes("masters")) || data.events[0];
-                const competition = event.competitions[0];
-                const competitors = competition.competitors;
+    // A — explicit cutLine field on the competition object (most reliable if present)
+    if (competition.cutLine !== undefined && competition.cutLine !== null) {
+        const v = parseScore(competition.cutLine);
+        if (v !== null) {
+            console.log('[CUT] source: competition.cutLine →', v);
+            return v;
+        }
+    }
 
-                // Derive cut line from the data directly:
-                // the worst score among players who actually made the cut
-                const madeCutPlayers = competitors.filter(c => {
-                    const statusName = c.status?.type?.name || '';
-                    const statusId = c.status?.id;
-                    return statusId !== "3" && statusName !== "STATUS_CUT";
-                });
-
-                let cutLine = 0;
-                if (madeCutPlayers.length > 0) {
-                    cutLine = Math.max(...madeCutPlayers.map(c => extractToPar(c)));
-                }
-
-                document.getElementById('cut-line-display').innerText =
-                    `Tournament: ${event.shortName || event.name} | Cut: ${fmtScore(cutLine)}`;
-
-                // Map scores onto each pool team
-                const teamResults = poolTeams.map(team => {
-                    let teamTotal = 0;
-
-                    const players = team.golfers.map(name => {
-                        if (!name) return null;
-
-                        const p = matchGolfer(name, competitors);
-
-                        let rawScore = 0;
-                        let isCut = false;
-                        let isWD = false;
-                        let displayName = name;
-
-                        if (p) {
-                            displayName = p.athlete?.displayName || name;
-                            rawScore = extractToPar(p);
-
-                            const statusId = p.status?.id;
-                            const statusName = p.status?.type?.name || '';
-                            isCut = statusId === "3" || statusName === "STATUS_CUT";
-                            isWD  = statusId === "4" || statusName === "STATUS_WITHDRAWN" || statusName === "STATUS_WD";
-                        }
-
-                        let poolScore = rawScore;
-                        let appliedCap = false;
-
-                        // Cut logic:
-                        // - Players who MADE the cut: cannot count worse than the cut line for the pool
-                        // - Players who MISSED the cut: keep their actual score (no cap)
-                        if (!isCut && !isWD && rawScore > cutLine) {
-                            poolScore = cutLine;
-                            appliedCap = true;
-                        }
-
-                        teamTotal += poolScore;
-                        return { name: displayName, raw: rawScore, pool: poolScore, appliedCap, isCut, isWD, found: !!p };
-                    }).filter(Boolean);
-
-                    return { ...team, total: teamTotal, players };
-                });
-
-                // Sort and rank
-                teamResults.sort((a, b) => a.total - b.total);
-                let currentRank = 1;
-                teamResults.forEach((team, i) => {
-                    if (i > 0 && team.total > teamResults[i - 1].total) currentRank = i + 1;
-                    const isTie = (i > 0 && team.total === teamResults[i - 1].total) ||
-                                  (i < teamResults.length - 1 && team.total === teamResults[i + 1].total);
-                    team.rankDisplay = (isTie ? "T" : "") + getOrdinal(currentRank);
-                });
-
-                // Render cards
-                container.innerHTML = '';
-                teamResults.forEach(team => {
-                    const card = document.createElement('div');
-                    card.className = 'masters-card overflow-hidden';
-
-                    let html = `
-                        <div class="leaderboard-header flex justify-between items-center">
-                            <div class="flex items-center">
-                                <span class="rank-badge">${team.rankDisplay}</span>
-                                <h2 class="text-xl leading-tight">${team.owner}</h2>
-                            </div>
-                            <div class="text-right">
-                                <span class="text-3xl font-black ${team.total < 0 ? 'text-red-400' : 'text-white'}">
-                                    ${fmtScore(team.total)}
-                                </span>
-                            </div>
-                        </div>
-                        <div class="p-4 bg-white">
-                            <table class="w-full text-sm">
-                                <tr class="text-left text-gray-400 border-b text-[10px] uppercase font-bold tracking-widest">
-                                    <th class="pb-2">Golfer</th>
-                                    <th class="pb-2 text-right">Actual</th>
-                                    <th class="pb-2 text-right">Pool</th>
-                                </tr>
-                    `;
-
-                    team.players.forEach(p => {
-                        const scoreClass = p.pool < 0 ? 'score-under' : (p.pool === 0 ? 'score-even' : 'score-over');
-                        const nameStyle = (p.isCut || p.isWD) ? 'italic text-gray-400' : 'text-gray-700';
-                        html += `
-                            <tr class="border-b border-gray-50 last:border-0">
-                                <td class="py-2 font-medium ${nameStyle}">
-                                    ${p.name}
-                                    ${p.appliedCap ? '<span class="cut-badge ml-1">Cap</span>' : ''}
-                                    ${p.isWD ? '<span class="cut-badge ml-1" style="background:#ccc;color:#333">WD</span>' : ''}
-                                    ${!p.found ? '<span class="text-red-300 text-[10px] ml-1">(no match)</span>' : ''}
-                                </td>
-                                <td class="text-right text-gray-400 text-xs">${fmtScore(p.raw)}</td>
-                                <td class="text-right ${scoreClass} text-base">${fmtScore(p.pool)}</td>
-                            </tr>
-                        `;
-                    });
-
-                    card.innerHTML = html + `</table></div>`;
-                    container.appendChild(card);
-                });
-
-                statusEl.innerText = `Last Refreshed: ${new Date().toLocaleTimeString()}`;
-
-            } catch (error) {
-                statusEl.innerText = "Sync Error — check console for details.";
-                console.error("Score update error:", error);
+    // Also check competition.notes for a cut line entry
+    const notes = competition.notes || [];
+    for (const note of notes) {
+        if ((note.type || '').toLowerCase().includes('cut')) {
+            // ESPN sometimes writes "Cut: +4" or just "4" — strip non-numeric except sign
+            const match = (note.text || '').match(/([+-]?\d+)/);
+            if (match) {
+                const v = parseInt(match[1], 10);
+                console.log('[CUT] source: competition.notes →', v);
+                return v;
             }
         }
+    }
 
-        updateScores();
-        setInterval(updateScores, 60000);
-    </script>
+    // B — derive from player statuses
+    // Separate into three buckets
+    const activePlayers = competitors.filter(c => !isMissedCut(c) && !isWithdrawn(c));
+    const cutPlayers    = competitors.filter(c => isMissedCut(c));
+
+    // Only derive after the cut has actually been made (there must be cut players)
+    if (cutPlayers.length === 0) {
+        console.log('[CUT] Cut not yet made — no STATUS_CUT players found.');
+        return null;
+    }
+
+    // The cut line = the worst (highest) score among players who made the cut
+    const scores = activePlayers.map(c => extractToPar(c));
+    const worst  = Math.max(...scores);
+
+    // Sanity-check: the best missed-cut score should be >= cut line
+    const bestMissed = Math.min(...cutPlayers.map(c => extractToPar(c)));
+    console.log('[CUT] source: derived from statuses | active worst:', worst, '| best missed:', bestMissed);
+
+    // If the numbers don't make sense (e.g. all zeros, pre-round data issue), bail
+    if (worst === -Infinity || worst === Infinity) return null;
+
+    return worst;
+}
+
+// ─── NAME MATCHING ───────────────────────────────────────────────────────────
+function matchGolfer(sheetName, competitors) {
+    const cleaned      = sheetName.toLowerCase().replace(/\s+/g, '');
+    const sheetLast    = sheetName.trim().split(/\s+/).pop().toLowerCase();
+    const sheetFirst   = sheetName.trim().split(/\s+/)[0].toLowerCase();
+
+    return competitors.find(c => {
+        const espnDisplay = (c.athlete?.displayName || '').toLowerCase();
+        const espnCleaned = espnDisplay.replace(/\s+/g, '');
+        const espnLast    = (c.athlete?.lastName  || '').toLowerCase().trim();
+        const espnFirst   = (c.athlete?.firstName || '').toLowerCase().trim();
+
+        // 1. Exact full name match (cleaned, no spaces) — strongest signal
+        if (espnCleaned === cleaned) return true;
+
+        // 2. ESPN display name contains the entire sheet name string
+        //    Only for names longer than 5 chars to avoid "Lee" matching "Fleewood" etc.
+        if (cleaned.length > 5 && espnCleaned.includes(cleaned)) return true;
+
+        // 3. Exact last name AND matching first initial
+        //    e.g. sheet "Rory McIlroy" → last "mcilroy", first initial "r"
+        //    Prevents "Adam Scott" matching "Scottie Scheffler"
+        if (sheetLast.length > 3 && sheetLast === espnLast) {
+            if (sheetFirst[0] === espnFirst[0]) return true;
+        }
+
+        return false;
+    });
+}
+
+// ─── DATA FETCHING ───────────────────────────────────────────────────────────
+async function fetchTeams() {
+    const res  = await fetch(SHEET_CSV_URL);
+    const text = await res.text();
+    const rows = text.split(/\r?\n/).map(line =>
+        line.split(',').map(v => v.replace(/^"|"$/g, '').trim())
+    );
+    return rows
+        .filter(r => r.length > 1 && r[0] && !r[0].toLowerCase().startsWith('team'))
+        .map(r => ({ owner: r[0], golfers: r.slice(1, 10).filter(Boolean) }));
+}
+
+// ─── MAIN UPDATE LOOP ────────────────────────────────────────────────────────
+async function updateScores() {
+    const statusEl   = document.getElementById('last-updated');
+    const cutEl      = document.getElementById('cut-line-display');
+    const container  = document.getElementById('teams-container');
+
+    statusEl.innerHTML = '<div class="loading-spinner mr-2"></div> Updating Scores...';
+
+    // 1. Fetch pool teams from Google Sheet
+    let poolTeams;
+    try {
+        poolTeams = await fetchTeams();
+    } catch (e) {
+        statusEl.innerText = 'Error: Could not load Google Sheet.';
+        console.error('[SHEET]', e);
+        return;
+    }
+    if (!poolTeams.length) {
+        statusEl.innerText = 'Error: Sheet returned no teams.';
+        return;
+    }
+
+    // 2. Fetch ESPN leaderboard
+    let competitors, competition, event;
+    try {
+        const res  = await fetch(API_URL);
+        if (!res.ok) throw new Error(`HTTP ${res.status}`);
+        const data = await res.json();
+
+        if (!data.events?.length) throw new Error('No events in ESPN response.');
+
+        event       = data.events.find(e => e.name?.toLowerCase().includes('masters')) || data.events[0];
+        competition = event.competitions[0];
+        competitors = competition.competitors;
+
+        console.log('[ESPN] Event:', event.name);
+        console.log('[ESPN] Competitors:', competitors.length);
+        // Log first competitor so you can inspect the full object shape in DevTools
+        console.log('[ESPN] Sample competitor:', JSON.stringify(competitors[0], null, 2));
+    } catch (e) {
+        statusEl.innerText = 'Sync Error — check console for details.';
+        console.error('[ESPN]', e);
+        return;
+    }
+
+    // 3. Derive cut line
+    const cutLine    = deriveCutLine(competition, competitors);
+    const cutDisplay = cutLine === null ? 'Cut TBD' : `Cut: ${fmtScore(cutLine)}`;
+    cutEl.innerText  = `${event.shortName || event.name} | ${cutDisplay}`;
+
+    // 4. Score each team
+    const teamResults = poolTeams.map(team => {
+        let teamTotal = 0;
+
+        const players = team.golfers.map(name => {
+            const c = matchGolfer(name, competitors);
+
+            let rawScore    = 0;
+            let missedCut   = false;
+            let withdrawn   = false;
+            let displayName = name;
+
+            if (c) {
+                displayName = c.athlete?.displayName || name;
+                rawScore    = extractToPar(c);
+                missedCut   = isMissedCut(c);
+                withdrawn   = isWithdrawn(c);
+                console.log(`[MATCH] "${name}" → "${displayName}" | raw: ${rawScore} | cut: ${missedCut} | wd: ${withdrawn}`);
+            } else {
+                console.warn(`[MATCH] No match found for: "${name}"`);
+            }
+
+            // ── Pool scoring rule ──────────────────────────────────────────
+            // • Players who MADE the cut: their pool score cannot exceed the cut line.
+            //   If they are over-par by more than the cut line (bad weekend), cap them.
+            // • Players who MISSED the cut: use their actual score with no cap.
+            //   They already paid the penalty of missing the weekend.
+            // • Withdrawn players: use their actual score (no cap).
+            let poolScore  = rawScore;
+            let appliedCap = false;
+
+            if (!missedCut && !withdrawn && cutLine !== null && rawScore > cutLine) {
+                poolScore  = cutLine;
+                appliedCap = true;
+            }
+
+            teamTotal += poolScore;
+            return { displayName, rawScore, poolScore, appliedCap, missedCut, withdrawn, found: !!c };
+        });
+
+        return { owner: team.owner, total: teamTotal, players };
+    });
+
+    // 5. Sort & rank
+    teamResults.sort((a, b) => a.total - b.total);
+    let rankCounter = 1;
+    teamResults.forEach((team, i) => {
+        if (i > 0 && team.total > teamResults[i - 1].total) rankCounter = i + 1;
+        const tied = (i > 0 && team.total === teamResults[i - 1].total) ||
+                     (i < teamResults.length - 1 && team.total === teamResults[i + 1].total);
+        team.rankDisplay = (tied ? 'T' : '') + getOrdinal(rankCounter);
+    });
+
+    // 6. Render
+    container.innerHTML = '';
+    teamResults.forEach(team => {
+        const card = document.createElement('div');
+        card.className = 'masters-card overflow-hidden';
+
+        const totalClass = team.total < 0 ? 'text-red-400' : 'text-white';
+
+        let html = `
+            <div class="leaderboard-header flex justify-between items-center">
+                <div class="flex items-center">
+                    <span class="rank-badge">${team.rankDisplay}</span>
+                    <h2 class="text-xl leading-tight">${team.owner}</h2>
+                </div>
+                <div class="text-right">
+                    <span class="text-3xl font-black ${totalClass}">${fmtScore(team.total)}</span>
+                </div>
+            </div>
+            <div class="p-4 bg-white">
+                <table class="w-full text-sm">
+                    <thead>
+                        <tr class="text-left text-gray-400 border-b text-[10px] uppercase font-bold tracking-widest">
+                            <th class="pb-2">Golfer</th>
+                            <th class="pb-2 text-right">Actual</th>
+                            <th class="pb-2 text-right">Pool</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+        `;
+
+        team.players.forEach(p => {
+            const scoreClass = p.poolScore < 0 ? 'score-under' : (p.poolScore === 0 ? 'score-even' : 'score-over');
+            const nameClass  = (p.missedCut || p.withdrawn) ? 'italic text-gray-400' : 'text-gray-700';
+            const noMatch    = !p.found ? '<span class="text-red-300 text-[10px] ml-1">(no match)</span>' : '';
+            const capBadge   = p.appliedCap ? '<span class="cap-badge ml-1">Cap</span>' : '';
+            const wdBadge    = p.withdrawn  ? '<span class="wd-badge ml-1">WD</span>'  : '';
+
+            html += `
+                <tr class="border-b border-gray-50 last:border-0">
+                    <td class="py-2 font-medium ${nameClass}">${p.displayName}${capBadge}${wdBadge}${noMatch}</td>
+                    <td class="text-right text-gray-400 text-xs">${fmtScore(p.rawScore)}</td>
+                    <td class="text-right ${scoreClass} text-base">${fmtScore(p.poolScore)}</td>
+                </tr>
+            `;
+        });
+
+        html += `</tbody></table></div>`;
+        card.innerHTML = html;
+        container.appendChild(card);
+    });
+
+    statusEl.innerText = `Last Refreshed: ${new Date().toLocaleTimeString()}`;
+}
+
+// ─── INIT ────────────────────────────────────────────────────────────────────
+updateScores();
+setInterval(updateScores, 60000); // refresh every minute
+</script>
 </body>
 </html>
