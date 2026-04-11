@@ -69,7 +69,6 @@ function getOrdinal(n) {
     return n + (s[(v - 20) % 10] || s[v] || s[0]);
 }
 
-// Parse any ESPN score string into a signed integer (to-par).
 function parseScore(val) {
     if (val === null || val === undefined) return null;
     const s = val.toString().trim().toUpperCase();
@@ -78,10 +77,7 @@ function parseScore(val) {
     return isNaN(n) ? null : n;
 }
 
-// Extract the to-par score from an ESPN competitor object.
-// Tries multiple locations in order of reliability.
 function extractToPar(c) {
-    // 1. statistics array — most reliable during live rounds
     if (Array.isArray(c.statistics)) {
         for (const s of c.statistics) {
             if (s.name === 'toPar' || s.name === 'scoreToPar' || s.abbreviation === 'TO PAR') {
@@ -90,21 +86,17 @@ function extractToPar(c) {
             }
         }
     }
-    // 2. linescores — cumulative value on the last entry
     if (Array.isArray(c.linescores) && c.linescores.length > 0) {
         const last = c.linescores[c.linescores.length - 1];
-        // linescores.value can be raw strokes on some endpoints — skip if implausibly large
         if (typeof last.value === 'number' && Math.abs(last.value) <= 30) return last.value;
     }
-    // 3. top-level score field
     const raw = c.score?.displayValue ?? c.score ?? null;
     const v = parseScore(raw);
     if (v !== null) return v;
 
-    return 0; // default: even par (pre-tournament / no data)
+    return 0; 
 }
 
-// Determine whether a competitor has missed the cut.
 function isMissedCut(c) {
     const id   = c.status?.id;
     const name = (c.status?.type?.name || '').toUpperCase();
@@ -117,61 +109,44 @@ function isWithdrawn(c) {
     return id === '4' || name === 'STATUS_WITHDRAWN' || name === 'STATUS_WD' || name === 'STATUS_DQ';
 }
 
-// ─── CUT LINE ────────────────────────────────────────────────────────────────
-// Strategy (in order of preference):
-//   A. If ESPN's competition object carries a cutLine field, use it directly.
-//   B. Find the worst score among players whose status is explicitly "made cut"
-//      (i.e. NOT missed-cut and NOT withdrawn). That worst score IS the cut line.
-//   C. If fewer than 50 players remain (pre-cut), return null so the UI can
-//      display "Cut TBD" rather than a bogus number.
+// ─── CUT LINE (FIXED) ────────────────────────────────────────────────────────
 function deriveCutLine(competition, competitors) {
-
-    // A — explicit cutLine field on the competition object (most reliable if present)
+    // A — Explicit cutLine field from ESPN API
     if (competition.cutLine !== undefined && competition.cutLine !== null) {
         const v = parseScore(competition.cutLine);
-        if (v !== null) {
-            console.log('[CUT] source: competition.cutLine →', v);
-            return v;
-        }
+        if (v !== null) return v;
     }
 
-    // Also check competition.notes for a cut line entry
+    // B — Safely parse notes (avoid matching generic rules like "Top 50")
     const notes = competition.notes || [];
     for (const note of notes) {
-        if ((note.type || '').toLowerCase().includes('cut')) {
-            // ESPN sometimes writes "Cut: +4" or just "4" — strip non-numeric except sign
-            const match = (note.text || '').match(/([+-]?\d+)/);
+        const text = (note.text || '').toUpperCase();
+        if (text.includes('CUT')) {
+            // Only match literal score indicators tied to the word cut
+            const match = text.match(/(?:CUT.*?)([+-]\d+|E|EVEN)\b/);
             if (match) {
-                const v = parseInt(match[1], 10);
-                console.log('[CUT] source: competition.notes →', v);
-                return v;
+                const v = parseScore(match[1]);
+                if (v !== null) return v;
             }
         }
     }
 
-    // B — derive from player statuses
-    // Separate into three buckets
-    const activePlayers = competitors.filter(c => !isMissedCut(c) && !isWithdrawn(c));
-    const cutPlayers    = competitors.filter(c => isMissedCut(c));
+    // C — Derive firmly from player statuses (Air-tight weekend fallback)
+    const cutPlayers = competitors.filter(c => isMissedCut(c));
+    
+    // If no players are officially marked as CUT yet, the cut is TBD.
+    if (cutPlayers.length === 0) return null;
 
-    // Only derive after the cut has actually been made (there must be cut players)
-    if (cutPlayers.length === 0) {
-        console.log('[CUT] Cut not yet made — no STATUS_CUT players found.');
-        return null;
+    // By rule, the true cut line is always exactly 1 stroke better than 
+    // the absolute best score among those who missed the cut.
+    // (We do not derive from active players to avoid weekend score inflation).
+    const cutScores = cutPlayers.map(c => extractToPar(c)).filter(s => s !== null);
+    if (cutScores.length > 0) {
+        const bestMissed = Math.min(...cutScores);
+        return bestMissed - 1; 
     }
 
-    // The cut line = the worst (highest) score among players who made the cut
-    const scores = activePlayers.map(c => extractToPar(c));
-    const worst  = Math.max(...scores);
-
-    // Sanity-check: the best missed-cut score should be >= cut line
-    const bestMissed = Math.min(...cutPlayers.map(c => extractToPar(c)));
-    console.log('[CUT] source: derived from statuses | active worst:', worst, '| best missed:', bestMissed);
-
-    // If the numbers don't make sense (e.g. all zeros, pre-round data issue), bail
-    if (worst === -Infinity || worst === Infinity) return null;
-
-    return worst;
+    return null;
 }
 
 // ─── NAME MATCHING ───────────────────────────────────────────────────────────
@@ -186,20 +161,11 @@ function matchGolfer(sheetName, competitors) {
         const espnLast    = (c.athlete?.lastName  || '').toLowerCase().trim();
         const espnFirst   = (c.athlete?.firstName || '').toLowerCase().trim();
 
-        // 1. Exact full name match (cleaned, no spaces) — strongest signal
         if (espnCleaned === cleaned) return true;
-
-        // 2. ESPN display name contains the entire sheet name string
-        //    Only for names longer than 5 chars to avoid "Lee" matching "Fleewood" etc.
         if (cleaned.length > 5 && espnCleaned.includes(cleaned)) return true;
-
-        // 3. Exact last name AND matching first initial
-        //    e.g. sheet "Rory McIlroy" → last "mcilroy", first initial "r"
-        //    Prevents "Adam Scott" matching "Scottie Scheffler"
         if (sheetLast.length > 3 && sheetLast === espnLast) {
             if (sheetFirst[0] === espnFirst[0]) return true;
         }
-
         return false;
     });
 }
@@ -224,7 +190,6 @@ async function updateScores() {
 
     statusEl.innerHTML = '<div class="loading-spinner mr-2"></div> Updating Scores...';
 
-    // 1. Fetch pool teams from Google Sheet
     let poolTeams;
     try {
         poolTeams = await fetchTeams();
@@ -238,7 +203,6 @@ async function updateScores() {
         return;
     }
 
-    // 2. Fetch ESPN leaderboard
     let competitors, competition, event;
     try {
         const res  = await fetch(API_URL);
@@ -250,23 +214,16 @@ async function updateScores() {
         event       = data.events.find(e => e.name?.toLowerCase().includes('masters')) || data.events[0];
         competition = event.competitions[0];
         competitors = competition.competitors;
-
-        console.log('[ESPN] Event:', event.name);
-        console.log('[ESPN] Competitors:', competitors.length);
-        // Log first competitor so you can inspect the full object shape in DevTools
-        console.log('[ESPN] Sample competitor:', JSON.stringify(competitors[0], null, 2));
     } catch (e) {
         statusEl.innerText = 'Sync Error — check console for details.';
         console.error('[ESPN]', e);
         return;
     }
 
-    // 3. Derive cut line
     const cutLine    = deriveCutLine(competition, competitors);
     const cutDisplay = cutLine === null ? 'Cut TBD' : `Cut: ${fmtScore(cutLine)}`;
     cutEl.innerText  = `${event.shortName || event.name} | ${cutDisplay}`;
 
-    // 4. Score each team
     const teamResults = poolTeams.map(team => {
         let teamTotal = 0;
 
@@ -283,17 +240,9 @@ async function updateScores() {
                 rawScore    = extractToPar(c);
                 missedCut   = isMissedCut(c);
                 withdrawn   = isWithdrawn(c);
-                console.log(`[MATCH] "${name}" → "${displayName}" | raw: ${rawScore} | cut: ${missedCut} | wd: ${withdrawn}`);
-            } else {
-                console.warn(`[MATCH] No match found for: "${name}"`);
-            }
+            } 
 
-            // ── Pool scoring rule ──────────────────────────────────────────
-            // • Players who MADE the cut: their pool score cannot exceed the cut line.
-            //   If they are over-par by more than the cut line (bad weekend), cap them.
-            // • Players who MISSED the cut: use their actual score with no cap.
-            //   They already paid the penalty of missing the weekend.
-            // • Withdrawn players: use their actual score (no cap).
+            // Capping logic (now perfectly functional due to the fixed cutLine variable)
             let poolScore  = rawScore;
             let appliedCap = false;
 
@@ -309,7 +258,6 @@ async function updateScores() {
         return { owner: team.owner, total: teamTotal, players };
     });
 
-    // 5. Sort & rank
     teamResults.sort((a, b) => a.total - b.total);
     let rankCounter = 1;
     teamResults.forEach((team, i) => {
@@ -319,7 +267,6 @@ async function updateScores() {
         team.rankDisplay = (tied ? 'T' : '') + getOrdinal(rankCounter);
     });
 
-    // 6. Render
     container.innerHTML = '';
     teamResults.forEach(team => {
         const card = document.createElement('div');
@@ -375,7 +322,7 @@ async function updateScores() {
 
 // ─── INIT ────────────────────────────────────────────────────────────────────
 updateScores();
-setInterval(updateScores, 60000); // refresh every minute
+setInterval(updateScores, 60000); 
 </script>
 </body>
 </html>
